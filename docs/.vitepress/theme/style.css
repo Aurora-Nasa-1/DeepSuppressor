@@ -1,0 +1,209 @@
+/**
+ * AMMF2 VitePress 自定义主题
+ * 基于Material Design 3设计系统
+ */
+
+:root {
+  /* 浅色模式颜色变量 */
+  --primary: oklch(.45 .20 var(--hue));
+  --on-primary: oklch(.98 .02 var(--hue));
+  --primary-container: oklch(.85 .10 var(--hue));
+  --on-primary-container: oklch(.15 .10 var(--hue));
+  
+  --secondary: oklch(.45 .05 var(--hue));
+  --on-secondary: oklch(.98 .02 var(--hue));
+  --secondary-container: oklch(.85 .05 var(--hue));
+  --on-secondary-container: oklch(.15 .05 var(--hue));
+  
+  --surface: oklch(.98 .01 var(--hue));
+  --on-surface: oklch(.15 .01 var(--hue));
+  --surface-variant: oklch(.85 .02 var(--hue));
+  --on-surface-variant: oklch(.30 .02 var(--hue));
+  --surface-container: oklch(.95 .01 var(--hue));
+  
+  /* 毛玻璃效果变量 */
+  --backdrop-blur: 12px;
+  --backdrop-brightness: 0.95;
+  --backdrop-saturation: 1.8;
+  
+  /* 动画变量 */
+  --transition-duration: var(--tra);
+  --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
+  --page-transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* VitePress变量映射 */
+  --vp-c-brand: var(--primary);
+  --vp-c-brand-light: var(--primary-container);
+  --vp-c-brand-lighter: var(--on-primary-container);
+  --vp-c-brand-dark: var(--on-primary);
+  --vp-c-brand-darker: var(--on-primary);
+  
+  /* MD3卡片效果 */
+  --vp-custom-block-tip-bg: var(--surface-variant);
+  --vp-custom-block-tip-border: transparent;
+  --vp-custom-block-tip-text: var(--on-surface-variant);
+  
+  /* 导航栏毛玻璃效果 */
+  --vp-nav-bg-color: rgba(var(--surface-variant), 0.8);
+  
+  --vp-c-bg: var(--surface);
+  --vp-c-bg-soft: var(--surface-variant);
+  --vp-c-bg-mute: var(--surface-container);
+  
+  --vp-c-text-1: var(--on-surface);
+  --vp-c-text-2: var(--on-surface-variant);
+  --vp-c-text-3: var(--on-surface-variant);
+}
+
+/* 深色模式 */
+.dark {
+  --primary: oklch(.85 .10 var(--hue));
+  --on-primary: oklch(.25 .10 var(--hue));
+  --primary-container: oklch(.35 .10 var(--hue));
+  --on-primary-container: oklch(.95 .05 var(--hue));
+  
+  /* 深色模式下的毛玻璃效果 */
+  --backdrop-brightness: 0.7;
+  --backdrop-saturation: 1.5;
+  
+  --secondary: oklch(.85 .04 var(--hue));
+  --on-secondary: oklch(.25 .04 var(--hue));
+  --secondary-container: oklch(.35 .03 var(--hue));
+  --on-secondary-container: oklch(.95 .04 var(--hue));
+  
+  --surface: oklch(.15 .01 var(--hue));
+  --on-surface: oklch(.95 .01 var(--hue));
+  --surface-variant: oklch(.30 .02 var(--hue));
+  --on-surface-variant: oklch(.85 .02 var(--hue));
+  --surface-container: oklch(.20 .01 var(--hue));
+}
+
+/* 字体设置 */
+:root {
+  --vp-font-family-base: "Roboto", "Noto Sans SC", sans-serif;
+  --vp-font-family-mono: "Roboto Mono", monospace;
+}
+
+/* 自定义组件样式 */
+.vp-doc a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+/* 动画效果 */
+@keyframes ripple {
+  from {
+    transform: scale(0);
+    opacity: 1;
+  }
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.VPNav {
+  transition: transform var(--transition-duration) var(--transition-timing);
+  backdrop-filter: blur(var(--backdrop-blur));
+  background: var(--vp-nav-bg-color);
+}
+
+.VPButton {
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+.vp-doc [class^='vp-'] {
+  transition: all var(--transition-duration) var(--transition-timing);
+}
+
+/* 导航栏毛玻璃效果 */
+.VPNav {
+  backdrop-filter: blur(var(--backdrop-blur)) 
+                  brightness(var(--backdrop-brightness))
+                  saturate(var(--backdrop-saturation));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid rgba(var(--on-surface), 0.1);
+}
+
+/* 卡片悬停效果 */
+.vp-doc div[class*='custom-block'] {
+  transition: all var(--transition-duration) var(--transition-timing);
+  border: 1px solid rgba(var(--on-surface), 0.1);
+  border-radius: 16px;
+  background: rgba(var(--surface-container), 0.8);
+  backdrop-filter: blur(var(--backdrop-blur));
+}
+
+.vp-doc div[class*='custom-block']:hover {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-color: rgba(var(--primary), 0.2);
+}
+
+.vp-doc a:hover {
+  color: var(--primary-container);
+  text-decoration: underline;
+}
+
+/* 按钮样式 */
+.VPButton.medium.brand {
+  background-color: var(--primary);
+  color: var(--on-primary);
+  border-radius: 12px;
+  padding: 8px 24px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all var(--transition-duration) var(--transition-timing);
+  border: 1px solid transparent;
+}
+
+.VPButton.medium.brand:hover {
+  background-color: var(--primary-container);
+  color: var(--on-primary-container);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(var(--primary), 0.2);
+}
+
+/* 导航栏样式 */
+.VPNav {
+  background-color: rgba(var(--surface), 0.8);
+}
+
+/* 页面过渡动画 */
+.VPContent {
+  transition: opacity var(--page-transition);
+}
+
+.VPContent.is-home {
+  opacity: 1;
+}
+
+/* 侧边栏样式 */
+.VPSidebar {
+  background: rgba(var(--surface), 0.8);
+  backdrop-filter: blur(var(--backdrop-blur));
+  border-right: 1px solid rgba(var(--on-surface), 0.1);
+}
+
+/* 链接动画 */
+.vp-doc a {
+  position: relative;
+  text-decoration: none;
+  background: linear-gradient(to right, var(--primary) 0%, var(--primary) 100%);
+  background-size: 0 2px;
+  background-repeat: no-repeat;
+  background-position: left 100%;
+  transition: background-size var(--transition-duration) var(--transition-timing);
+}
+
+.vp-doc a:hover {
+  background-size: 100% 2px;
+  color: var(--primary);
+}
+
+/* 移除点击高亮 */
+* {
+  -webkit-tap-highlight-color: transparent;
+}

@@ -1,0 +1,104 @@
+/**
+ * VitePress Material Design 3 主题
+ * 核心颜色变量和基础样式
+ */
+
+:root {
+  --hue: 300; /* primary color hue */
+  --rhw: 16rem; /* read-optimized half width */
+  --fnt: "Roboto", sans-serif;
+  --tra: .2s ease-in-out;
+}
+
+@media (prefers-reduced-motion) { :root { --tra: 0; } }
+
+:root { /* Color */
+  color-scheme:             light dark;
+
+  --hut:                    calc(var(--hue) + 60);
+
+  --primary:                light-dark(oklch(.5 .10 var(--hue)), oklch(.8 .10 var(--hue)));
+  --on-primary:             light-dark(oklch( 1 .00 var(--hue)), oklch(.3 .10 var(--hue)));
+  --primary-container:      light-dark(oklch(.9 .05 var(--hue)), oklch(.4 .10 var(--hue)));
+  --on-primary-container:   light-dark(oklch(.2 .10 var(--hue)), oklch(.9 .05 var(--hue)));
+
+  --secondary:              light-dark(oklch(.5 .04 var(--hue)), oklch(.8 .04 var(--hue)));
+  --on-secondary:           light-dark(oklch( 1 .00 var(--hue)), oklch(.3 .04 var(--hue)));
+  --secondary-container:    light-dark(oklch(.9 .04 var(--hue)), oklch(.4 .03 var(--hue)));
+  --on-secondary-container: light-dark(oklch(.2 .04 var(--hue)), oklch(.9 .04 var(--hue)));
+
+  --tertiary:               light-dark(oklch(.5 .06 var(--hut)), oklch(.8 .07 var(--hut)));
+  --on-tertiary:            light-dark(oklch( 1 .00 var(--hut)), oklch(.3 .06 var(--hut)));
+  --tertiary-container:     light-dark(oklch(.9 .05 var(--hut)), oklch(.4 .06 var(--hut)));
+  --on-tertiary-container:  light-dark(oklch(.2 .05 var(--hut)), oklch(.9 .05 var(--hut)));
+
+  --error:                  light-dark(oklch(.5 .16 28), oklch(.8 .16 28));
+  --on-error:               light-dark(oklch( 1 .00 28), oklch(.3 .16 28));
+  --error-container:        light-dark(oklch(.9 .08 28), oklch(.4 .16 28));
+  --on-error-container:     light-dark(oklch(.2 .16 28), oklch(.9 .08 28));
+
+  --surface:                light-dark(oklch(.98 .01 var(--hue)), oklch(.19 .01 var(--hue)));
+  --on-surface:             light-dark(oklch(.23 .01 var(--hue)), oklch(.91 .01 var(--hue)));
+  --surface-variant:        light-dark(oklch(.92 .02 var(--hue)), oklch(.40 .02 var(--hue)));
+  --on-surface-variant:     light-dark(oklch(.40 .02 var(--hue)), oklch(.83 .02 var(--hue)));
+  --surface-container-high: light-dark(oklch(.93 .02 var(--hue)), oklch(.29 .01 var(--hue)));
+  --surface-container:      light-dark(oklch(.95 .02 var(--hue)), oklch(.24 .01 var(--hue)));
+  --surface-container-low:  light-dark(oklch(.97 .01 var(--hue)), oklch(.23 .01 var(--hue)));
+
+  --background:             var(--surface);
+  --on-background:          var(--on-surface);
+
+  --outline:                light-dark(oklch(.57 .02 var(--hue)), oklch(.66 .01 var(--hue)));
+  --outline-variant:        light-dark(oklch(.83 .02 var(--hue)), oklch(.40 .02 var(--hue)));
+
+  --inverse-surface:        light-dark(oklch(.31 .01 var(--hue)), oklch(.91 .01 var(--hue)));
+  --inverse-on-surface:     light-dark(oklch(.96 .01 var(--hue)), oklch(.31 .01 var(--hue)));
+  --inverse-primary:        light-dark(oklch(.83 .09 var(--hue)), oklch(.50 .13 var(--hue)));
+
+  --disabled12on38: color-mix(in oklch, var(--on-surface)  32%, transparent);
+}
+
+:root { /* Elevation */
+  --ele0: #7F7F7F00 0 0 0 0;
+  --ele1: #7F7F7F33 0 .1250rem .0625rem -.0625rem,
+          #7F7F7F24 0 .0625rem .0625rem 0,
+          #7F7F7F1E 0 .0625rem .1875rem 0;
+  --ele2: #7F7F7F33 0 .1875rem .1875rem -.125rem,
+          #7F7F7F24 0 .1875rem .2500rem 0,
+          #7F7F7F1E 0 .0625rem .5000rem 0;
+  --ele3: #7F7F7F33 0 .1875rem .3125rem -.0625rem,
+          #7F7F7F24 0 .3750rem .6250rem 0,
+          #7F7F7F1E 0 .0625rem 1.125rem 0;
+}
+
+:root { /* Typography */
+  --display-l:  400 3.5625rem/4.00rem var(--fnt);
+  --display-m:  400 2.8125rem/3.25rem var(--fnt);
+  --display-s:  400 2.2500rem/2.75rem var(--fnt);
+
+  --headline-l: 400 2.0000rem/2.50rem var(--fnt);
+  --headline-m: 400 1.7500rem/2.25rem var(--fnt);
+  --headline-s: 400 1.5000rem/2.00rem var(--fnt);
+
+  --title-l:    400 1.3750rem/1.75rem var(--fnt);
+  --title-m:    500 1.0000rem/1.50rem var(--fnt);
+  --title-s:    500 0.8750rem/1.25rem var(--fnt);
+
+  --body-l:     400 1.0000rem/1.50rem var(--fnt);
+  --body-m:     400 0.8750rem/1.25rem var(--fnt);
+  --body-s:     400 0.7500rem/1.00rem var(--fnt);
+
+  --label-l:    500 0.8750rem/1.25rem var(--fnt);
+  --label-m:    500 0.7500rem/1.00rem var(--fnt);
+  --label-s:    500 0.6875rem/1.00rem var(--fnt);
+
+  --main: max(1rem, calc(50vw - var(--rhw)));
+}
+
+/* 基础样式 */
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: var(--surface);
+  color: var(--on-surface);
+}

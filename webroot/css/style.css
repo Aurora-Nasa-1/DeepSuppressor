@@ -1,0 +1,22 @@
+/**
+ * AMMF WebUI 主样式文件
+ * 基于MD3设计系统重构的统一样式
+ */
+/* 导入MD3基础样式系统 */
+@import url('main-color.css');
+@import url('md3.css');
+@import url('pages.css');
+@import url('app.css');
+@import url('animations.css');
+
+/* 主题切换支持 */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+* {
+  -webkit-tap-highlight-color: transparent;
+}
