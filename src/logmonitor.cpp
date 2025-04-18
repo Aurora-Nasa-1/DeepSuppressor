@@ -217,38 +217,71 @@ private:
             
             if (file.fd == -1) {
                 file.fd = open(path.c_str(), O_RDWR | O_CREAT | O_APPEND, 0644);
-                if (file.fd != -1) {
-                    // 预分配文件空间
-                    if (fallocate(file.fd, 0, 0, BUFFER_SIZE) == 0) {
-                        // 内存映射
-                        file.data = (char*)mmap(nullptr, BUFFER_SIZE, 
-                            PROT_READ | PROT_WRITE, MAP_SHARED, file.fd, 0);
-                        file.size = BUFFER_SIZE;
-                        file.used = 0;
-                    }
+                if (file.fd == -1) return;
+                
+                // 获取当前文件大小
+                struct stat st;
+                if (fstat(file.fd, &st) == -1) {
+                    close(file.fd);
+                    file.fd = -1;
+                    return;
                 }
+                
+                size_t needed_size = st.st_size + content.size();
+                size_t map_size = ((needed_size + BUFFER_SIZE - 1) / BUFFER_SIZE) * BUFFER_SIZE;
+                
+                // 确保文件大小足够
+                if (ftruncate(file.fd, map_size) == -1) {
+                    close(file.fd);
+                    file.fd = -1;
+                    return;
+                }
+                
+                file.data = (char*)mmap(nullptr, map_size, 
+                    PROT_READ | PROT_WRITE, MAP_SHARED, file.fd, 0);
+                if (file.data == MAP_FAILED) {
+                    close(file.fd);
+                    file.fd = -1;
+                    file.data = nullptr;
+                    return;
+                }
+                
+                file.size = map_size;
+                file.used = st.st_size;
             }
         
             if (file.fd != -1 && file.data && file.data != MAP_FAILED) {
                 // 检查是否需要扩展映射
                 if (file.used + content.size() > file.size) {
+                    size_t new_size = ((file.used + content.size() + BUFFER_SIZE - 1) 
+                        / BUFFER_SIZE) * BUFFER_SIZE;
+                    
                     munmap(file.data, file.size);
-                    file.size *= 2;
-                    fallocate(file.fd, 0, 0, file.size);
-                    file.data = (char*)mmap(nullptr, file.size, 
-                        PROT_READ | PROT_WRITE, MAP_SHARED, file.fd, 0);
-                }
-        
-                if (file.data && file.data != MAP_FAILED) {
-                    // 写入数据
-                    memcpy(file.data + file.used, content.data(), content.size());
-                    file.used += content.size();
-        
-                    // 定期同步到磁盘
-                    if (file.used >= BUFFER_SIZE / 2) {
-                        msync(file.data, file.used, MS_ASYNC);
+                    if (ftruncate(file.fd, new_size) == -1) {
+                        close(file.fd);
+                        file.fd = -1;
+                        file.data = nullptr;
+                        return;
                     }
+                    
+                    file.data = (char*)mmap(nullptr, new_size, 
+                        PROT_READ | PROT_WRITE, MAP_SHARED, file.fd, 0);
+                    if (file.data == MAP_FAILED) {
+                        close(file.fd);
+                        file.fd = -1;
+                        file.data = nullptr;
+                        return;
+                    }
+                    
+                    file.size = new_size;
                 }
+        
+                // 写入数据
+                memcpy(file.data + file.used, content.data(), content.size());
+                file.used += content.size();
+        
+                // 定期同步到磁盘
+                msync(file.data + file.used - content.size(), content.size(), MS_ASYNC);
             }
         }
         
@@ -267,19 +300,39 @@ int main(int argc, char* argv[]) {
     std::string log_name = "system";
     std::string message;
     
+    auto process_quoted_arg = [](const char* arg) -> std::string {
+        std::string result;
+        size_t len = strlen(arg);
+        // 如果参数被双引号包围，去除双引号
+        if (len >= 2 && arg[0] == '"' && arg[len-1] == '"') {
+            result = std::string(arg + 1, len - 2);
+        } else {
+            result = arg;
+        }
+        return result;
+    };
+
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
         if (arg == "-d" && i + 1 < argc) {
-            log_dir = argv[++i];
+            log_dir = process_quoted_arg(argv[++i]);
         } else if (arg == "-l" && i + 1 < argc) {
-            int level = std::stoi(argv[++i]);
-            log_level = (level < 1) ? 1 : (level > 4) ? 4 : level;
+            try {
+                int level = std::stoi(argv[++i]);
+                log_level = (level < 1) ? 1 : (level > 4) ? 4 : level;
+            } catch (const std::exception&) {
+                std::cerr << "Invalid log level, using default (3)" << std::endl;
+            }
         } else if (arg == "-c" && i + 1 < argc) {
-            command = argv[++i];
+            command = process_quoted_arg(argv[++i]);
         } else if (arg == "-n" && i + 1 < argc) {
-            log_name = argv[++i];
+            log_name = process_quoted_arg(argv[++i]);
         } else if (arg == "-m" && i + 1 < argc) {
-            message = argv[++i];
+            message = process_quoted_arg(argv[++i]);
+            // 如果下一个参数不是新的选项，则认为是消息的继续
+            while (i + 1 < argc && argv[i + 1][0] != '-') {
+                message += " " + process_quoted_arg(argv[++i]);
+            }
         } else if (arg == "-v") {
             std::cout << "logmonitor 版本 " << VERSION << std::endl;
             return 0;

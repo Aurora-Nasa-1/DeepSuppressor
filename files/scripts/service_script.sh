@@ -30,6 +30,12 @@ while IFS='=' read -r key value; do
 
             log_info "Starting process manager for package: $package, process: $process"
             nohup "$PROCESS_MANAGER" "$package" "$process" >/dev/null 2>&1 &
+            pid=$!
+            if ps -p $pid > /dev/null; then
+                log_info "Process manager started successfully with PID: $pid"
+            else
+                log_error "Failed to start process manager for $package"
+            fi
             Aurora_ui_print "Process manager started for $package - $process"
 
             i=$((i + 1))
