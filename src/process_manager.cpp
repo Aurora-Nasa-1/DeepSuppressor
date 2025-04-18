@@ -8,6 +8,15 @@
 #include <sys/types.h>
 #include <android/log.h>
 
+// Add this extern "C" block if it's not already present
+#ifdef __cplusplus
+extern "C" {
+#endif
+// This ensures the log functions are properly linked
+#ifdef __cplusplus
+}
+#endif
+
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "ProcessManager", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "ProcessManager", __VA_ARGS__)
 

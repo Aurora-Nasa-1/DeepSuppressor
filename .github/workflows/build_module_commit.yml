@@ -82,12 +82,12 @@ jobs:
       - name: Build process_manager for aarch64
         run: |
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-aarch64 src/process_manager.cpp
+          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-aarch64 src/process_manager.cpp -llog
       
       - name: Build process_manager for x86_64
         run: |
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-x86_64 src/process_manager.cpp
+          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-x86_64 src/process_manager.cpp -llog
 
       - name: Strip binaries
         run: |
