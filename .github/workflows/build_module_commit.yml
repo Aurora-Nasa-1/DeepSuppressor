@@ -79,12 +79,24 @@ jobs:
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
           -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/logmonitor-x86_64 src/logmonitor.cpp
 
+      - name: Build process_manager for aarch64
+        run: |
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-aarch64 src/process_manager.cpp
+      
+      - name: Build process_manager for x86_64
+        run: |
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
+          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-x86_64 src/process_manager.cpp
+
       - name: Strip binaries
         run: |
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/filewatch-aarch64 || echo "Failed to strip aarch64 binary"
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/filewatch-x86_64 || echo "Failed to strip x86_64 binary"
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/logmonitor-aarch64 || echo "Failed to strip logmonitor aarch64 binary"
           $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/logmonitor-x86_64 || echo "Failed to strip logmonitor x86_64 binary"
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/process_manager-aarch64 || echo "Failed to strip process_manager aarch64 binary"
+          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/process_manager-x86_64 || echo "Failed to strip process_manager x86_64 binary"
 
       - name: Remove files
         run: |
