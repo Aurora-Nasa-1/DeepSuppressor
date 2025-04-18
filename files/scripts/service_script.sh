@@ -8,8 +8,11 @@ log_info "Starting process manager service"
 CONFIG_FILE="$MODPATH/module_settings/config.sh"
 PROCESS_MANAGER="$MODPATH/bin/process_manager"
 
-# 遍历所有环境变量查找配置
-env | while IFS='=' read -r key value; do
+# 从配置文件读取配置
+while IFS='=' read -r key value; do
+    # 跳过注释行和空行
+    [[ "$key" =~ ^# ]] || [[ -z "$key" ]] && continue
+    
     # 检查是否是启用配置
     if [[ "$key" =~ ^suppress_com_.*$ ]] && [[ ! "$key" =~ _[0-9]+$ ]] && [ "$value" = "true" ]; then
         # 提取包名（将下划线转回点号）
@@ -32,7 +35,7 @@ env | while IFS='=' read -r key value; do
             i=$((i + 1))
         done
     fi
-done
+done < "$CONFIG_FILE"
 
 # 监控配置文件变化
 monitor_config() {
