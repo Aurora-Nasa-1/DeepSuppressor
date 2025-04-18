@@ -31,33 +31,4 @@ fi
 # SCRIPT_EN.md
 
 # 定义清理进程函数
-cleanup_processes() {
-    log_info "开始清理进程"
-    
-    # 关闭logmonitor进程
-    if [ -f "$MODPATH/bin/logmonitor" ]; then
-        log_info "正在停止logmonitor服务"
-        "$MODPATH/bin/logmonitor" -c stop >/dev/null 2>&1
-        
-        # 查找并终止所有logmonitor进程
-        for pid in $(ps -ef | grep "[l]ogmonitor" | awk '{print $2}'); do
-            log_debug "正在终止进程 logmonitor (PID: $pid)"
-            kill -9 "$pid" >/dev/null 2>&1
-        done
-    fi
-    
-    # 确保日志被刷新
-    flush_log
-    
-    log_info "进程清理完成"
-}
-
-# 确保日志被刷新
-if [ -f "$MODPATH/bin/logmonitor" ]; then
-    "$MODPATH/bin/logmonitor" -c flush >/dev/null 2>&1
-else
-    flush_log
-fi
-
-# 脚本结束前清理进程
-cleanup_processes
+stop_logger

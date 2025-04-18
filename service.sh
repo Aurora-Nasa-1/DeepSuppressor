@@ -76,27 +76,7 @@ enter_pause_mode() {
     fi
 }
 
-# 定义关闭所有守护进程和日志进程的函数
-cleanup_processes() {
-    log_info "${SERVICE_CLEANUP_START:-开始清理进程}"
-    
-    # 关闭logmonitor进程
-    if [ -f "$MODPATH/bin/logmonitor" ]; then
-        log_info "${SERVICE_STOPPING_LOGMONITOR:-正在停止logmonitor服务}"
-        "$MODPATH/bin/logmonitor" -c stop >/dev/null 2>&1
-        
-        # 查找并终止所有logmonitor进程
-        for pid in $(ps -ef | grep "[l]ogmonitor" | awk '{print $2}'); do
-            log_debug "${SERVICE_KILLING_PROCESS:-正在终止进程} logmonitor (PID: $pid)"
-            kill -9 "$pid" >/dev/null 2>&1
-        done
-    fi
-    
-    # 确保日志被刷新
-    flush_log
-    
-    log_info "${SERVICE_CLEANUP_COMPLETE:-进程清理完成}"
-}
+=
 
 # 记录启动信息
 log_info "${SERVICE_STARTED:-服务已启动}"
@@ -116,11 +96,4 @@ log_info "${SERVICE_NORMAL_EXIT:-服务正常退出}"
 # 脚本结束前更新状态为正常退出
 update_status "NORMAL_EXIT"
 
-# 确保日志被刷新
-if [ -f "$MODPATH/bin/logmonitor" ]; then
-    "$MODPATH/bin/logmonitor" -c flush >/dev/null 2>&1
-else
-    flush_log
-fi
-# 清理所有守护进程和日志进程
-cleanup_processes
+stop_logger

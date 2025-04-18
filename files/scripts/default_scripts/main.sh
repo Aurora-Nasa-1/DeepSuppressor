@@ -83,7 +83,7 @@ Aurora_abort() {
     # 使用日志系统
     log_error "$1"
     # 确保日志被写入
-    flush_log
+    stop_logger
     echo "[${ERROR_TEXT}] $1"
     abort "$ERROR_CODE_TEXT: $2"
 }

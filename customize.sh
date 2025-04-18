@@ -30,24 +30,6 @@ if [ -f "$MODPATH/bin/logmonitor" ]; then
     "$MODPATH/bin/logmonitor" -c write -n "install" -m "开始安装过程" -l 3 >/dev/null 2>&1
 fi
 
-# 定义清理进程函数
-cleanup_processes() {
-    if [ -f "$MODPATH/bin/logmonitor" ]; then
-        "$MODPATH/bin/logmonitor" -c write -n "install" -m "开始清理进程" -l 3 >/dev/null 2>&1
-
-        # 停止logmonitor服务
-        "$MODPATH/bin/logmonitor" -c stop >/dev/null 2>&1
-
-        # 查找并终止所有logmonitor进程
-        for pid in $(ps -ef | grep "[l]ogmonitor" | awk '{print $2}'); do
-            "$MODPATH/bin/logmonitor" -c write -n "install" -m "正在终止进程 logmonitor (PID: $pid)" -l 4 >/dev/null 2>&1
-            kill -9 "$pid" >/dev/null 2>&1
-        done
-
-        "$MODPATH/bin/logmonitor" -c write -n "install" -m "进程清理完成" -l 3 >/dev/null 2>&1
-        "$MODPATH/bin/logmonitor" -c flush >/dev/null 2>&1
-    fi
-}
 
 main() {
 
@@ -105,10 +87,4 @@ if [ -n "$MODID" ]; then
 fi
 Aurora_ui_print "$END"
 
-# 确保日志被刷新
-if [ -f "$MODPATH/bin/logmonitor" ]; then
-    "$MODPATH/bin/logmonitor" -c flush >/dev/null 2>&1
-fi
-
-# 安装完成后清理进程
-cleanup_processes
+stop_logger

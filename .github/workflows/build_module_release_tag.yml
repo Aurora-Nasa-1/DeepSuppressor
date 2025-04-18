@@ -56,45 +56,32 @@ jobs:
         with:
           ndk-version: r26d
 
-      - name: Build filewatch for aarch64
+      - name: Find and build all C++ files
         run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -static-libstdc++ -o bin/filewatch-aarch64 src/filewatch.cpp
-
-      - name: Build filewatch for x86_64
-        run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -static-libstdc++ -o bin/filewatch-x86_64 src/filewatch.cpp
-
-      - name: Build logmonitor for aarch64
-        run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/logmonitor-aarch64 src/logmonitor.cpp
-
-      - name: Build logmonitor for x86_64
-        run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/logmonitor-x86_64 src/logmonitor.cpp
-
-      - name: Build process_manager for aarch64
-        run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-aarch64 src/process_manager.cpp -llog
-      
-      - name: Build process_manager for x86_64
-        run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
-          -O2 -Wall -Wextra -std=c++11 -static-libstdc++ -o bin/process_manager-x86_64 src/process_manager.cpp -llog
+          export CFLAGS="-O3 -flto"
+          export CXXFLAGS="-O3 -flto -std=c++17"
+          # 查找所有cpp文件并构建
+          for cpp_file in src/*.cpp; do
+            filename=$(basename -- "$cpp_file" .cpp)
+            
+            # 构建aarch64版本
+            $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
+              -O2 -Wall -Wextra -std=c++11 -static-libstdc++ \
+              -o "bin/${filename}-aarch64" "$cpp_file"
+            
+            # 构建x86_64版本
+            $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
+              -O2 -Wall -Wextra -std=c++11 -static-libstdc++ \
+              -o "bin/${filename}-x86_64" "$cpp_file"
+          done
 
       - name: Strip binaries
         run: |
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/filewatch-aarch64 || echo "Failed to strip aarch64 binary"
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/filewatch-x86_64 || echo "Failed to strip x86_64 binary"
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/logmonitor-aarch64 || echo "Failed to strip logmonitor aarch64 binary"
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/logmonitor-x86_64 || echo "Failed to strip logmonitor x86_64 binary"
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/process_manager-aarch64 || echo "Failed to strip process_manager aarch64 binary"
-          $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip bin/process_manager-x86_64 || echo "Failed to strip process_manager x86_64 binary"
-
+          # 自动strip所有生成的二进制文件
+          for binary in bin/*-aarch64 bin/*-x86_64; do
+            $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip "$binary" || echo "Failed to strip $binary"
+          done
+          
       - name: Remove files
         run: |
           rm -f src/*.cpp
