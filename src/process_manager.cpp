@@ -7,15 +7,9 @@
 #include <signal.h>
 #include <sys/types.h>
 
-// Only include Android logging on Android builds
-#ifdef __ANDROID__
-#include <android/log.h>
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "ProcessManager", __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "ProcessManager", __VA_ARGS__)
-#else
-#define LOGI(...) printf("INFO: " __VA_ARGS__); printf("\n")
-#define LOGE(...) fprintf(stderr, "ERROR: " __VA_ARGS__); fprintf(stderr, "\n")
-#endif
+// 使用标准输出替代Android日志
+#define LOGI(...) do { printf("[INFO] "); printf(__VA_ARGS__); printf("\n"); } while(0)
+#define LOGE(...) do { fprintf(stderr, "[ERROR] "); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); } while(0)
 
 class ProcessManager {
 private:
