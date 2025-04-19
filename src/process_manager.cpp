@@ -66,8 +66,8 @@ private:
 
     std::vector<Target> targets;
     std::atomic<bool> running{true};
-    static constexpr auto BACKGROUND_THRESHOLD = std::chrono::seconds(10);
-    static constexpr auto CHECK_INTERVAL = std::chrono::seconds(5);
+    static constexpr auto BACKGROUND_THRESHOLD = std::chrono::seconds(20); // 增加到 20 秒
+    static constexpr auto CHECK_INTERVAL = std::chrono::seconds(15); // 增加到 15 秒
 
     static std::string exec(const std::string& cmd) {
         std::array<char, 128> buffer;
@@ -128,22 +128,32 @@ public:
             for (auto& target : targets) {
                 try {
                     bool current_foreground = isProcessForeground(target.package_name);
-                    
-                    if (!current_foreground && target.is_foreground) {
-                        target.is_foreground = false;
-                        target.last_background_time = std::chrono::steady_clock::now();
-                        Logger::log("INFO", "Package " + target.package_name + " moved to background");
-                    } else if (current_foreground && !target.is_foreground) {
-                        target.is_foreground = true;
-                        Logger::log("INFO", "Package " + target.package_name + " moved to foreground");
-                        continue;
-                    }
 
-                    if (!target.is_foreground) {
-                        auto now = std::chrono::steady_clock::now();
-                        if (now - target.last_background_time >= BACKGROUND_THRESHOLD) {
-                            for (const auto& proc : target.process_names) {
-                                killProcess(proc);
+                    if (current_foreground) {
+                        // 应用当前在前台
+                        if (!target.is_foreground) {
+                            // 刚从后台切换到前台
+                            target.is_foreground = true;
+                            Logger::log("INFO", "Package " + target.package_name + " moved to foreground");
+                        }
+                        // 如果本来就在前台，则无需操作，跳过杀死逻辑
+                    } else {
+                        // 应用当前在后台
+                        if (target.is_foreground) {
+                            // 刚从前台切换到后台
+                            target.is_foreground = false;
+                            target.last_background_time = std::chrono::steady_clock::now();
+                            Logger::log("INFO", "Package " + target.package_name + " moved to background");
+                        } else {
+                            // 之前已经在后台
+                            auto now = std::chrono::steady_clock::now();
+                            if (now - target.last_background_time >= BACKGROUND_THRESHOLD) {
+                                Logger::log("INFO", "Background threshold met for " + target.package_name + ". Killing processes.");
+                                for (const auto& proc : target.process_names) {
+                                    killProcess(proc);
+                                }
+                                // 注意：这里杀死后，下次检查如果仍在后台且超过时间会再次尝试杀死
+                                // 如果希望只杀死一次，可以在杀死后重置时间或移除目标
                             }
                         }
                     }
