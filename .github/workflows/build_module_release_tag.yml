@@ -90,7 +90,7 @@ jobs:
       - name: Compress files
         run: |
           LATEST_TAG=$(cat latest_tag.txt)
-          . ./module_settings/configs.sh
+          . ./module_settings/config.sh
           7z a -r -mx9 "${action_name}_${LATEST_TAG}.zip" * -x!*.git* -x!*.zip -x!latest_tag.txt
 
       - name: Create GitHub release

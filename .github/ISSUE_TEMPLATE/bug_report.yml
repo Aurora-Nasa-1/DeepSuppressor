@@ -42,7 +42,7 @@ body:
     attributes:
       label: 预期结果
       description: 请描述您预期的结果。
-      placeholder: 应该成功执行脚本，无任何错误提示，并且按预期工作，安装模块等。
+      placeholder: 请描述您期望的结果。
 
   - type: textarea
     id: actual_result
