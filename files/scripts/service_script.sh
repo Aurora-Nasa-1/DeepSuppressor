@@ -17,29 +17,29 @@ while IFS='=' read -r key value; do
     if [[ "$key" =~ ^suppress_com_.*$ ]] && [[ ! "$key" =~ _[0-9]+$ ]] && [ "$value" = "true" ]; then
         # 提取包名（将下划线转回点号）
         package=${key#suppress_}
-        package=$(echo "$package" | tr '_' '.')
-
-        # 遍历该应用的所有进程配置
-        i=1
-        while true; do
-            process_key="suppress_config_${key#suppress_}_${i}"
-            process=${!process_key}
-
-            # 如果没有更多进程配置则退出循环
-            [ -z "$process" ] && break
-
-            log_info "Starting process manager for package: $package, process: $process"
-            nohup "$PROCESS_MANAGER" "$package" "$process" >/dev/null 2>&1 &
-            pid=$!
-            if ps -p $pid > /dev/null; then
-                log_info "Process manager started successfully with PID: $pid"
-            else
-                log_error "Failed to start process manager for $package"
+        package=$(echo "$package" | sed 's/_/./g')
+        
+        log_info "Found enabled package: $package"
+        
+        # 重新读取配置文件来查找对应的进程配置
+        while IFS='=' read -r proc_key proc_value; do
+            [[ "$proc_key" =~ ^# ]] || [[ -z "$proc_key" ]] && continue
+            
+            if [[ "$proc_key" =~ ^suppress_config_${key#suppress_}_[0-9]+$ ]] && [[ ! -z "$proc_value" ]]; then
+                # 移除引号
+                process=$(echo "$proc_value" | tr -d '"')
+                
+                log_info "Starting process manager for package: $package, process: $process"
+                nohup "$PROCESS_MANAGER" "$package" "$process" >/dev/null 2>&1 &
+                pid=$!
+                if ps -p $pid > /dev/null; then
+                    log_info "Process manager started successfully with PID: $pid"
+                else
+                    log_error "Failed to start process manager for $package"
+                fi
+                Aurora_ui_print "Process manager started for $package - $process"
             fi
-            Aurora_ui_print "Process manager started for $package - $process"
-
-            i=$((i + 1))
-        done
+        done < "$CONFIG_FILE"
     fi
 done < "$CONFIG_FILE"
 
