@@ -15,6 +15,7 @@
 #include <functional>
 #include <fstream>
 #include <deque>
+#include <cstdarg>
 
 // 日志工具类
 class Logger {
@@ -136,7 +137,9 @@ public:
 // 进程管理器类
 class ProcessManager {
 public:
-    ProcessManager(std::vector<std::pair<std::string, std::string>> initial_targets)
+    ProcessManager(std::vector<std::pair<std::string, std::vector<std::string>>> initial_targets) 
+        : should_run(true)  // Initialize atomic bool
+    {
         std::lock_guard<std::mutex> lock(mutex);
         targets.reserve(initial_targets.size());
         for (const auto& [pkg, procs] : initial_targets) {
@@ -175,7 +178,7 @@ private:
     static constexpr auto IDLE_CHECK_INTERVAL = std::chrono::seconds(30);
 
     std::vector<Target> targets;
-    std::atomic<bool> should_run{true};
+    std::atomic<bool> should_run;
     std::mutex mutex;
     std::condition_variable cv;
 
@@ -233,14 +236,23 @@ private:
         }
     }
 
+    // 在Logger类定义之后添加静态成员初始化
+    std::ofstream Logger::log_file;
+    std::deque<std::string> Logger::log_buffer;
+    std::mutex Logger::log_mutex;
+
+    // 修复handleBackgroundServices方法
     void handleBackgroundServices(Target& target, 
                                 const std::chrono::steady_clock::time_point& current_time) {
         if (!target.is_foreground && target.needs_check) {
             auto background_duration = current_time - target.last_background_time;
             if (background_duration >= BACKGROUND_THRESHOLD) {
-                if (isProcessRunning(target.process_name)) {
-                    Logger::info("Killing background services for %s", target.package_name.c_str());
-                    killBackgroundServices(target);
+                for (const auto& process_name : target.process_names) {
+                    if (isProcessRunning(process_name)) {
+                        Logger::info("Killing background services for %s", target.package_name.c_str());
+                        killBackgroundServices(target);
+                        break;  // 只要有一个进程在运行就处理
+                    }
                 }
                 target.needs_check = false;
             }
