@@ -648,7 +648,6 @@ int main(int argc, char* argv[]) {
     std::string log_name = "system";
     std::string message;
     std::string batch_file;
-    std::string execute_command; // <-- Add variable to store the command to execute
     bool low_power = false;
 
     // Parse command line arguments
@@ -679,15 +678,6 @@ int main(int argc, char* argv[]) {
             message = argv[++i];
         } else if (arg == "-b" && i + 1 < argc) {
             batch_file = argv[++i];
-        } else if (arg == "-e" && i + 1 < argc) { // <-- Add parsing for -e
-            execute_command = argv[++i];
-            // If -e is specified, implicitly set command to "execute" unless another command was already set
-            if (command.empty()) {
-                 command = "execute";
-            } else if (command != "execute") {
-                 std::cerr << "Warning: -e option specified with another command (-c " << command << "). Prioritizing -e." << std::endl;
-                 command = "execute";
-            }
         } else if (arg == "-p") {
             low_power = true;
         } else if (arg == "-h" || arg == "--help") {
@@ -695,18 +685,16 @@ int main(int argc, char* argv[]) {
             std::cout << "Options:" << std::endl;
             std::cout << "  -d DIR    Specify log directory (default: /data/adb/modules/AMMF2/logs)" << std::endl;
             std::cout << "  -l LEVEL  Set log level (1=Error, 2=Warn, 3=Info, 4=Debug, default: 3)" << std::endl;
-            std::cout << "  -c CMD    Execute command (daemon, write, batch, flush, clean, execute)" << std::endl; // <-- Add execute to CMD list
-            std::cout << "  -n NAME   Specify log name (for write/batch/execute commands, default: system)" << std::endl; // <-- Add execute here
+            std::cout << "  -c CMD    Execute command (daemon, write, batch, flush, clean)" << std::endl;
+            std::cout << "  -n NAME   Specify log name (for write/batch commands, default: system)" << std::endl;
             std::cout << "  -m MSG    Log message content (for write command)" << std::endl;
             std::cout << "  -b FILE   Batch input file, format: level|message (one per line, for batch command)" << std::endl;
-            std::cout << "  -e CMD    Execute external command and log its stdout/stderr (requires -n)" << std::endl; // <-- Add -e description
             std::cout << "  -p        Enable low power mode (reduce write frequency)" << std::endl;
             std::cout << "  -h        Show help information" << std::endl;
             std::cout << "Example:" << std::endl;
             std::cout << "  Start daemon: " << argv[0] << " -c daemon -d /path/to/logs -l 4 -p" << std::endl;
             std::cout << "  Write log: " << argv[0] << " -c write -n main -m \"Test message\" -l 3" << std::endl;
             std::cout << "  Batch write: " << argv[0] << " -c batch -n errors -b batch_logs.txt" << std::endl;
-            std::cout << "  Execute command: " << argv[0] << " -c execute -n cmd_output -e \"ping 8.8.8.8\"" << std::endl; // <-- Add example for execute
             std::cout << "  Flush logs: " << argv[0] << " -c flush -d /path/to/logs" << std::endl;
             std::cout << "  Clean logs: " << argv[0] << " -c clean -d /path/to/logs" << std::endl;
             return 0;
@@ -717,7 +705,6 @@ int main(int argc, char* argv[]) {
     }
 
     // If no command is specified, default to starting the daemon
-    // If -e was specified, command is already set to "execute"
     if (command.empty()) {
         command = "daemon";
     }
