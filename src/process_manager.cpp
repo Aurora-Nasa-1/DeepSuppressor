@@ -21,8 +21,8 @@ class Logger {
 private:
     static std::ofstream log_file;
     static std::deque<std::string> log_buffer;
-    static const size_t BUFFER_SIZE = 100; // 缓冲100条日志后写入
     static std::mutex log_mutex;
+    static const size_t BUFFER_SIZE = 20;
 
     static void flushBuffer() {
         if (log_buffer.empty()) return;
@@ -43,7 +43,7 @@ private:
 public:
     static void init() {
         std::lock_guard<std::mutex> lock(log_mutex);
-        log_file.open("/data/local/tmp/deep_suppressor.log", 
+        log_file.open("/data/adb/modules/AMMF/logs/process_manager.log", 
                      std::ios::out | std::ios::trunc);
     }
 
@@ -136,10 +136,11 @@ public:
 // 进程管理器类
 class ProcessManager {
 public:
-    explicit ProcessManager(std::vector<std::pair<std::string, std::string>> initial_targets) {
+    ProcessManager(std::vector<std::pair<std::string, std::string>> initial_targets)
+        std::lock_guard<std::mutex> lock(mutex);
         targets.reserve(initial_targets.size());
-        for (const auto& [pkg, proc] : initial_targets) {
-            targets.emplace_back(pkg, proc);
+        for (const auto& [pkg, procs] : initial_targets) {
+            targets.emplace_back(pkg, procs);
         }
         Logger::info("Process Manager initialized with %zu targets", targets.size());
     }
@@ -317,5 +318,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    Logger::shutdown();  // 添加这行
     return 0;
 }
