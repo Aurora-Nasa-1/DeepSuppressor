@@ -31,7 +31,7 @@
    ```
    示例配置：
    ```
-   # 压制微信
+   # 压制A114514APP(包名com.a114514.app)
    suppress_APP_com_a114514_app=true
    suppress_config_com_a114514_app_1="com_a114514_app:fvv"
    suppress_config_com_a114514_app_2="com_a114514_app:appbrand114"
@@ -52,7 +52,7 @@
 - `action.sh`, `build.sh`, `customize.sh`, `service.sh`: 项目相关的 Shell 脚本
 - `LICENSE`: 项目许可证文件
 
-## 构建与安装
+## 构建
 
 1.  **配置模块 (可选):** 编辑 `module_settings/config.sh` 文件，修改模块的 ID、名称、作者和描述等信息。
 2.  **运行构建脚本:** 在项目根目录下打开 Bash 终端，执行：
