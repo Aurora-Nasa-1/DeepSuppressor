@@ -7,7 +7,9 @@
 #include <cstdio>    // For popen, pclose, fgets, printf, fprintf
 #include <cstdlib>   // For system, atoi
 #include <unistd.h>  // For sleep (though std::this_thread::sleep_for is used)
-// #include <android/log.h> // Removed Android logging
+#include <vector>    // Include vector for storing targets
+#include <utility>   // Include utility for std::pair and std::move
+#include <map>       // Include map for tracking state per target
 
 // 使用标准输出和标准错误替代Android日志
 #define LOGI(...) do { printf("[INFO] "); printf(__VA_ARGS__); printf("\n"); fflush(stdout); } while(0)
@@ -38,132 +40,185 @@ std::string execute_command(const std::string& cmd) {
     return result;
 }
 
+// 结构体用于存储每个监控目标的信息和状态
+struct TargetInfo {
+    std::string package_name;
+    std::string process_name;
+    bool is_foreground;
+    std::chrono::steady_clock::time_point background_transition_time;
+    bool kill_pending;
+
+    TargetInfo(std::string pkg, std::string proc)
+        : package_name(std::move(pkg)),
+          process_name(std::move(proc)),
+          is_foreground(true), // 初始假设为前台
+          kill_pending(false) {}
+};
+
+
 class ProcessManager {
 private:
-    std::string target_process_name;
-    std::string associated_package_name;
-    bool is_package_foreground;
+    std::vector<TargetInfo> targets; // 存储所有监控目标
 
     // Configuration constants using C++11 chrono literals
+    // 这些常量现在是全局的，适用于所有目标
     static constexpr auto CHECK_FREQUENCY = std::chrono::seconds(30);
     static constexpr auto KILL_DELAY = std::chrono::seconds(2);
-    static constexpr auto BACKGROUND_CHECK_INTERVAL = std::chrono::seconds(60);
+    // 注意：BACKGROUND_CHECK_INTERVAL 可能不再需要，因为我们总是以 CHECK_FREQUENCY 检查所有目标
+    // 但保留它，以防将来需要不同的逻辑
+    static constexpr auto BACKGROUND_CHECK_INTERVAL = std::chrono::seconds(60); // 或者可以移除或调整逻辑
 
-    // Checks if the associated package is in the foreground
-    bool check_package_foreground_state() {
-        // Using dumpsys activity activities is a common way, but output format might vary.
-        // Grep for mResumedActivity or mFocusedActivity associated with the package name.
-        std::string cmd = "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity' | grep " + associated_package_name;
+    // Checks if the specified package is in the foreground
+    // 修改为接受包名作为参数
+    bool check_package_foreground_state(const std::string& package_name) {
+        std::string cmd = "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity' | grep " + package_name;
         std::string result = execute_command(cmd);
-
         bool is_foreground = !result.empty();
-        LOGI("Package %s foreground check: %s", associated_package_name.c_str(), is_foreground ? "Yes" : "No");
+        // 日志可以保持，或者根据需要调整详细程度
+        // LOGI("Package %s foreground check: %s", package_name.c_str(), is_foreground ? "Yes" : "No");
         return is_foreground;
     }
 
     // Kills the target process using pkill
-    void kill_target_process() {
-        // Use pkill -f to match the full process name/command line.
-        // This avoids issues with special characters like ':' and handles multiple instances.
-        // SIGKILL is forceful. Consider SIGTERM first if graceful shutdown is desired,
-        // but SIGKILL is often used for this type of cleanup.
-        std::string cmd = "pkill -9 -f " + target_process_name; // -9 is SIGKILL
-        LOGI("Attempting to kill process matching: %s", target_process_name.c_str());
-
+    // 修改为接受进程名作为参数
+    void kill_target_process(const std::string& process_name) {
+        std::string cmd = "pkill -9 -f \"" + process_name + "\""; // 为进程名加上引号以处理特殊字符
+        LOGI("Attempting to kill process matching: %s", process_name.c_str());
         int result = system(cmd.c_str());
-
         if (result == 0) {
-            LOGI("Successfully sent SIGKILL to process(es) matching: %s", target_process_name.c_str());
+            LOGI("Successfully sent SIGKILL to process(es) matching: %s", process_name.c_str());
         } else {
-            LOGW("pkill command for '%s' finished with exit code %d. (Might mean process not found or another issue)", target_process_name.c_str(), result);
+            // pkill 在找不到进程时通常返回 1，这不一定是错误
+             if (result != 1) { // 只记录非“未找到”的错误码
+                 LOGW("pkill command for '%s' finished with exit code %d.", process_name.c_str(), result);
+             } else {
+                 LOGI("Process matching '%s' not found (or already killed).", process_name.c_str());
+             }
         }
     }
 
 public:
-    ProcessManager(std::string target_process, std::string package_name)
-        : target_process_name(std::move(target_process)),
-          associated_package_name(std::move(package_name)),
-          is_package_foreground(true) // Assume foreground initially
+    // 构造函数接受一个 TargetInfo 的向量
+    ProcessManager(std::vector<TargetInfo> initial_targets)
+        : targets(std::move(initial_targets))
     {
-        LOGI("Process Manager initialized for target process '%s' associated with package '%s'",
-             target_process_name.c_str(), associated_package_name.c_str());
-        // Perform an initial check to set the correct state
-        is_package_foreground = check_package_foreground_state();
-        LOGI("Initial state: Package %s is %s",
-             associated_package_name.c_str(), is_package_foreground ? "in foreground" : "in background");
+        LOGI("Process Manager initialized with %zu targets.", targets.size());
+        // 对每个目标执行初始状态检查
+        for (auto& target : targets) {
+            target.is_foreground = check_package_foreground_state(target.package_name);
+            LOGI("Initial state for target (Package: %s, Process: %s): %s",
+                 target.package_name.c_str(), target.process_name.c_str(),
+                 target.is_foreground ? "Foreground" : "Background");
+        }
     }
 
-    // Main monitoring loop
+    // Main monitoring loop - 现在迭代处理所有目标
     void monitor_and_control() {
-        LOGI("Starting monitoring loop for package: %s", associated_package_name.c_str());
-
-        using namespace std::chrono_literals; // For s literal
+        LOGI("Starting combined monitoring loop...");
+        using namespace std::chrono_literals;
+        auto next_check_time = std::chrono::steady_clock::now();
 
         while (true) {
-            try {
-                bool current_foreground = check_package_foreground_state();
-
-                if (current_foreground != is_package_foreground) {
-                    if (!current_foreground) { // Package went to background
-                        LOGI("Package %s moved to background. Waiting %lld seconds before killing '%s'...",
-                             associated_package_name.c_str(),
-                             std::chrono::duration_cast<std::chrono::seconds>(KILL_DELAY).count(),
-                             target_process_name.c_str());
-
-                        std::this_thread::sleep_for(KILL_DELAY);
-
-                        // Re-check state after delay, in case user quickly switched back
-                        if (!check_package_foreground_state()) {
-                            LOGI("Package %s still in background after delay. Killing process '%s'.",
-                                 associated_package_name.c_str(), target_process_name.c_str());
-                            kill_target_process();
-                            is_package_foreground = false; // Update state only after confirmed kill attempt
-                        } else {
-                            LOGI("Package %s returned to foreground during kill delay. Aborting kill.", associated_package_name.c_str());
-                            is_package_foreground = true; // Update state
-                        }
-                    } else { // Package came back to foreground
-                        LOGI("Package %s returned to foreground.", associated_package_name.c_str());
-                        is_package_foreground = true;
-                    }
-                }
-
-                // Determine sleep duration based on current state
-                auto sleep_duration = is_package_foreground ? CHECK_FREQUENCY : BACKGROUND_CHECK_INTERVAL;
-                LOGI("Sleeping for %lld seconds...", std::chrono::duration_cast<std::chrono::seconds>(sleep_duration).count());
-                std::this_thread::sleep_for(sleep_duration);
-
-            } catch (const std::exception& e) {
-                LOGE("Exception in monitor loop: %s. Sleeping before retry.", e.what());
-                std::this_thread::sleep_for(CHECK_FREQUENCY); // Default sleep on error
-            } catch (...) {
-                LOGE("Unknown exception in monitor loop. Sleeping before retry.");
-                std::this_thread::sleep_for(CHECK_FREQUENCY); // Default sleep on error
+            auto current_time = std::chrono::steady_clock::now();
+            // 等待直到下一个检查时间点
+            if (current_time < next_check_time) {
+                std::this_thread::sleep_until(next_check_time);
+                current_time = std::chrono::steady_clock::now(); // 更新当前时间
             }
+
+            // 设置下一次检查的时间
+            next_check_time = current_time + CHECK_FREQUENCY;
+
+            LOGI("Performing periodic check..."); // 添加一个周期性检查的日志
+
+            for (auto& target : targets) {
+                try {
+                    bool current_foreground = check_package_foreground_state(target.package_name);
+
+                    if (current_foreground != target.is_foreground) {
+                        // 状态发生变化
+                        if (!current_foreground) { // 应用转到后台
+                            LOGI("Package %s moved to background. Scheduling kill for process '%s' in %lld seconds.",
+                                 target.package_name.c_str(), target.process_name.c_str(),
+                                 std::chrono::duration_cast<std::chrono::seconds>(KILL_DELAY).count());
+                            target.is_foreground = false;
+                            target.kill_pending = true;
+                            target.background_transition_time = current_time; // 记录转换时间
+                        } else { // 应用回到前台
+                            LOGI("Package %s returned to foreground.", target.package_name.c_str());
+                            target.is_foreground = true;
+                            if (target.kill_pending) {
+                                LOGI("Kill pending for process '%s' cancelled.", target.process_name.c_str());
+                                target.kill_pending = false; // 取消待处理的 kill
+                            }
+                        }
+                    }
+
+                    // 检查是否有待处理的 kill 并且延迟时间已到
+                    if (target.kill_pending && !target.is_foreground) {
+                        auto time_since_background = current_time - target.background_transition_time;
+                        if (time_since_background >= KILL_DELAY) {
+                            LOGI("Kill delay elapsed for package %s. Killing process '%s'.",
+                                 target.package_name.c_str(), target.process_name.c_str());
+                            // 在杀死之前最后检查一次，以防万一用户在检查间隔内快速切换回来
+                            if (!check_package_foreground_state(target.package_name)) {
+                                kill_target_process(target.process_name);
+                            } else {
+                                LOGI("Package %s returned to foreground just before kill. Aborting kill.", target.package_name.c_str());
+                                target.is_foreground = true; // 更新状态
+                            }
+                            target.kill_pending = false; // 重置 kill 标志
+                        }
+                        // 如果延迟未到，更新下一次检查时间，确保能在延迟结束后尽快检查
+                        else {
+                             auto potential_next_check = target.background_transition_time + KILL_DELAY;
+                             if (potential_next_check < next_check_time) {
+                                 next_check_time = potential_next_check;
+                             }
+                        }
+                    }
+
+                } catch (const std::exception& e) {
+                    LOGE("Exception processing target (Package: %s, Process: %s): %s",
+                         target.package_name.c_str(), target.process_name.c_str(), e.what());
+                    // 发生异常时，可以考虑重置该目标的状态或跳过本次检查
+                    target.kill_pending = false; // 避免异常导致意外杀死
+                } catch (...) {
+                    LOGE("Unknown exception processing target (Package: %s, Process: %s)",
+                         target.package_name.c_str(), target.process_name.c_str());
+                    target.kill_pending = false;
+                }
+            } // end for loop iterating through targets
+
+            // 主循环不再需要根据前后台状态决定睡眠时间，统一由 next_check_time 控制
+            // LOGI("Sleeping until next check..."); // 日志已移到循环开始处
+
         } // end while(true)
     } // end monitor_and_control
 };
 
 int main(int argc, char* argv[]) {
-    // Redirect stderr to /dev/null to prevent cluttering Magisk logs if needed,
-    // but keep it for now for potential errors from system() or other low-level issues.
-    // freopen("/dev/null", "w", stderr);
-
-    if (argc != 3) {
-        // Use LOGE for errors that should go to stderr/log file
-        LOGE("Usage: %s <package_name> <target_process_name>", argv[0]);
-        // Also print to stderr for immediate feedback if run manually from shell
-        fprintf(stderr, "Usage: %s <package_name> <target_process_name>\n", argv[0]);
+    // 参数格式: ./process_manager <pkg1> <proc1> <pkg2> <proc2> ...
+    // 参数数量必须是奇数 (程序名 + N*2 个目标参数) 且至少为 3 (程序名 + 1 对目标)
+    if (argc < 3 || argc % 2 == 0) {
+        LOGE("Usage: %s <package_name_1> <target_process_name_1> [<package_name_2> <target_process_name_2> ...]", argv[0]);
+        fprintf(stderr, "Usage: %s <package_name_1> <target_process_name_1> [<package_name_2> <target_process_name_2> ...]\n", argv[0]);
         return 1;
     }
 
-    std::string package_name = argv[1];
-    std::string target_process = argv[2];
+    std::vector<TargetInfo> targets_to_monitor;
+    LOGI("Parsing command line arguments for targets...");
+    for (int i = 1; i < argc; i += 2) {
+        std::string package_name = argv[i];
+        std::string target_process = argv[i+1];
+        LOGI("Adding target: Package=%s, Process=%s", package_name.c_str(), target_process.c_str());
+        targets_to_monitor.emplace_back(package_name, target_process);
+    }
 
-    LOGI("Process Manager starting. Package: %s, Target Process: %s", package_name.c_str(), target_process.c_str());
+    LOGI("Process Manager starting with %zu targets.", targets_to_monitor.size());
 
     try {
-        ProcessManager manager(target_process, package_name);
+        ProcessManager manager(std::move(targets_to_monitor));
         manager.monitor_and_control(); // This runs indefinitely
     } catch (const std::exception& e) {
         LOGE("Fatal error during initialization or monitoring: %s", e.what());
@@ -173,6 +228,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // 正常情况下不应到达这里
     LOGI("Process Manager exiting unexpectedly.");
     return 0;
 }
