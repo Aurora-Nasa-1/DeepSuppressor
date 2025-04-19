@@ -7,12 +7,11 @@ LOG_DIR="$MODPATH/logs"
 
 # 确保日志目录存在
 mkdir -p "$LOG_DIR" || exit 1
-
 # 从配置文件读取配置并构建参数
 ARGS=""
 while IFS='=' read -r key value; do
     # 跳过注释和空行
-    [[ "$key" =~ ^#|^$ ]] && continue
+    [[ "$key" =~ ^"#"|^"$" ]] && continue
     
     # 处理suppress_APP_开头的配置项
     if [[ "$key" =~ ^suppress_APP_ ]] && [[ "$value" == "true" ]]; then
@@ -23,14 +22,16 @@ while IFS='=' read -r key value; do
         # 收集该包名下的所有进程配置
         while IFS='=' read -r proc_key proc_value; do
             if [[ "$proc_key" =~ ^suppress_config_${key#suppress_APP_}_[0-9]+$ ]] && 
-               [[ -n "$proc_value" ]] && 
-               [[ ! "$proc_value" =~ ^# ]]; then
+               [[ -n "$proc_value" ]]; then
                 process=$(echo "$proc_value" | tr -d '"')
                 ARGS="$ARGS \"$process\""
+                log_info "Added process: $process"
             fi
         done < "$CONFIG_FILE"
+        log_info "Added package: $package"
     fi
 done < "$CONFIG_FILE"
 
 # 启动进程管理器（不再需要重定向到日志文件，因为程序内部已经处理日志）
 nohup sh -c "exec \"$PROCESS_MANAGER\" $ARGS" >/dev/null 2>&1 &
+log_info "Process manager started with arguments: $ARGS"
