@@ -290,46 +290,86 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        Logger::error("Usage: %s <package_name> <process_name_1> [<process_name_2> ...] [<package_name_2> <process_name_2_1> ...]", argv[0]);
-        return 1;
-    }
-
-    std::vector<std::pair<std::string, std::vector<std::string>>> targets;
-    int i = 1;
-    while (i < argc) {
-        std::string package_name = argv[i++];
-        std::vector<std::string> process_names;
-        
-        // 收集所有进程名，直到遇到下一个包名或参数结束
-        while (i < argc && strchr(argv[i], '.') == nullptr) {  // 假设包名中包含点号，进程名不包含
-            process_names.push_back(argv[i++]);
-        }
-        
-        if (process_names.empty()) {
-            Logger::error("No process names specified for package %s", package_name.c_str());
+    Logger::init();  // 确保日志系统已初始化
+    
+    try {
+        if (argc < 3) {
+            Logger::error("Invalid arguments count: %d", argc);
+            Logger::error("Usage: %s [-d] <package_name> <process_name_1> [<process_name_2> ...]", argv[0]);
             return 1;
         }
-        
-        targets.emplace_back(package_name, process_names);
-        Logger::info("Added target: Package=%s with %zu processes", 
-                    package_name.c_str(), process_names.size());
-        for (const auto& proc : process_names) {
-            Logger::info("  - Process: %s", proc.c_str());
-        }
-    }
 
-    try {
+        bool daemon_mode = false;
+        int arg_offset = 1;
+        
+        // 守护进程模式检查
+        if (strcmp(argv[1], "-d") == 0) {
+            daemon_mode = true;
+            arg_offset = 2;
+            Logger::info("Starting in daemon mode");
+            
+            if (argc < 4) {
+                Logger::error("Insufficient arguments for daemon mode");
+                return 1;
+            }
+            
+            pid_t pid = fork();
+            if (pid < 0) {
+                Logger::error("Fork failed with error: %d", errno);
+                return 1;
+            }
+            if (pid > 0) {
+                Logger::info("Parent process exiting");
+                return 0;
+            }
+            
+            if (setsid() < 0) {
+                Logger::error("setsid failed with error: %d", errno);
+                return 1;
+            }
+            umask(0);
+        }
+
+        std::vector<std::pair<std::string, std::vector<std::string>>> targets;
+        int i = arg_offset;
+        while (i < argc) {
+            std::string package_name = argv[i++];
+            Logger::debug("Processing package: %s", package_name.c_str());
+            
+            std::vector<std::string> process_names;
+            while (i < argc && strchr(argv[i], '.') == nullptr) {
+                process_names.push_back(argv[i++]);
+                Logger::debug("Added process: %s", process_names.back().c_str());
+            }
+            
+            if (process_names.empty()) {
+                Logger::error("No processes specified for package: %s", package_name.c_str());
+                return 1;
+            }
+            
+            targets.emplace_back(package_name, process_names);
+            Logger::info("Registered package %s with %zu processes", 
+                       package_name.c_str(), process_names.size());
+        }
+
+        if (targets.empty()) {
+            Logger::error("No valid targets specified");
+            return 1;
+        }
+
+        Logger::info("Starting process manager with %zu targets", targets.size());
         ProcessManager manager(std::move(targets));
         manager.start();
+        
     } catch (const std::exception& e) {
-        Logger::error("Fatal error: %s", e.what());
+        Logger::error("Exception caught in main: %s", e.what());
         return 1;
     } catch (...) {
-        Logger::error("Unknown fatal error");
+        Logger::error("Unknown exception caught in main");
         return 1;
     }
 
-    Logger::shutdown();  // 添加这行
+    Logger::info("Process manager shutdown");
+    Logger::shutdown();
     return 0;
 }
