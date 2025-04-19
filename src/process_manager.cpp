@@ -9,15 +9,33 @@
 #include <fstream>
 #include <ctime>
 #include <filesystem>
+#include <vector>
+#include <mutex> // 添加 mutex 头文件
 
 class Logger {
 private:
     static std::ofstream log_file;
+    static std::vector<std::string> log_buffer; // 日志缓冲区
+    static std::mutex buffer_mutex; // 用于保护缓冲区的互斥锁
+    static const size_t buffer_size_threshold = 6; // 缓冲区大小阈值
+
     static void ensureDirectoryExists(const std::string& path) {
         std::filesystem::path dir = std::filesystem::path(path).parent_path();
         if (!std::filesystem::exists(dir)) {
             std::filesystem::create_directories(dir);
         }
+    }
+
+    // 将缓冲区内容写入文件
+    static void flushBuffer() {
+        std::lock_guard<std::mutex> lock(buffer_mutex); // 获取锁
+        if (!log_file.is_open() || log_buffer.empty()) return;
+
+        for (const auto& msg : log_buffer) {
+            log_file << msg << std::endl;
+        }
+        log_file.flush(); // 确保写入磁盘
+        log_buffer.clear(); // 清空缓冲区
     }
 
 public:
@@ -28,20 +46,40 @@ public:
     }
 
     static void log(const std::string& level, const std::string& message) {
-        if (!log_file.is_open()) return;
-        
         time_t now = time(nullptr);
         std::string time_str = ctime(&now);
         time_str = time_str.substr(0, time_str.length() - 1); // 移除换行符
-        
-        log_file << time_str << " [" << level << "] " << message << std::endl;
-        log_file.flush();
-        
+
+        std::string formatted_message = time_str + " [" + level + "] " + message;
+
         // 同时输出到控制台
-        std::cout << time_str << " [" << level << "] " << message << std::endl;
+        std::cout << formatted_message << std::endl;
+
+        // 将日志添加到缓冲区
+        {
+            std::lock_guard<std::mutex> lock(buffer_mutex); // 获取锁
+            log_buffer.push_back(formatted_message);
+
+            // 检查缓冲区是否达到阈值
+            if (log_buffer.size() >= buffer_size_threshold) {
+                // 释放锁后刷新缓冲区，避免持有锁进行IO操作
+                // 注意：这里在锁内检查，但在锁外调用 flushBuffer，
+                // flushBuffer 内部会再次获取锁。
+                // 也可以直接在锁内调用，但持有锁进行IO可能影响性能。
+                // 为了简化，先在锁内调用。
+                if (log_file.is_open()) {
+                     for (const auto& msg : log_buffer) {
+                        log_file << msg << std::endl;
+                    }
+                    log_file.flush();
+                    log_buffer.clear();
+                }
+            }
+        } // 锁在这里释放
     }
 
     static void close() {
+        flushBuffer(); // 关闭前确保刷新缓冲区
         if (log_file.is_open()) {
             log_file.close();
         }
@@ -49,6 +87,8 @@ public:
 };
 
 std::ofstream Logger::log_file;
+std::vector<std::string> Logger::log_buffer; // 初始化静态成员
+std::mutex Logger::buffer_mutex; // 初始化静态成员
 
 class ProcessManager {
 private:
