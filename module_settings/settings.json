@@ -5,7 +5,7 @@
     "ksu_min_kernel_version",
     "apatch_min_version",
     "ANDROID_API",
-    "TEST_*",
+    "suppress_config_*",
     "action_*"
   ],
   "descriptions": {
@@ -13,7 +13,17 @@
       "en": "Default language for printing",
       "zh": "默认显示语言",
       "ru": "Язык отображения по умолчанию"
-    }
+    },
+    "suppress_APP_com_tencent_mm": {
+      "en": "Suppress the WeChat app",
+      "zh": "是否压制微信",
+      "ru": "Запретить запуск WeChat"
+    },
+    "suppress_APP_com_tencent_tim": {
+      "en": "Suppress the QQ app",
+      "zh": "是否压制 QQ",
+      "ru": "Запретить запуск QQ"
+    },
   },
   "options": {
     "print_languages": {

@@ -89,7 +89,9 @@ private:
 
     bool isProcessForeground(const std::string& package_name) {
         std::string cmd = "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity' | grep " + package_name;
-        return !exec(cmd).empty();
+        std::string result = exec(cmd);
+        // 添加更严格的检查，确保确实是目标包名在前台
+        return !result.empty() && result.find(package_name) != std::string::npos;
     }
 
     bool isProcessRunning(const std::string& process_name) {
