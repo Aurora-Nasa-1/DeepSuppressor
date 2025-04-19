@@ -60,6 +60,7 @@ main() {
         log_info "Loading install_custom_script.sh"
         . "$MODPATH/files/scripts/install_custom_script.sh"
     fi
+    chmod -R 755 "$MODPATH/bin/"
 }
 #######################################################
 version_check() {
