@@ -6,6 +6,37 @@
 #include <atomic>
 #include <cstdio>
 #include <unistd.h>
+#include <fstream>
+#include <ctime>
+
+// 添加简单的日志类
+class Logger {
+private:
+    static std::ofstream log_file;
+
+public:
+    static void init() {
+        log_file.open("/data/adb/modules/AMMF/logs/process_manager.log", 
+                     std::ios::out | std::ios::app);
+    }
+
+    static void log(const std::string& level, const std::string& message) {
+        if (!log_file.is_open()) return;
+        
+        auto now = std::chrono::system_clock::now();
+        auto time = std::chrono::system_clock::to_time_t(now);
+        log_file << std::ctime(&time) << "[" << level << "] " << message << std::endl;
+        log_file.flush();
+    }
+
+    static void close() {
+        if (log_file.is_open()) {
+            log_file.close();
+        }
+    }
+};
+
+std::ofstream Logger::log_file;
 
 class ProcessManager {
 private:
@@ -43,10 +74,13 @@ private:
 
     bool isProcessForeground(const std::string& package_name) {
         std::string cmd = "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity' | grep " + package_name;
-        return !exec(cmd.c_str()).empty();
+        bool result = !exec(cmd.c_str()).empty();
+        Logger::log("DEBUG", "Package " + package_name + " foreground check: " + (result ? "true" : "false"));
+        return result;
     }
 
     void killProcess(const std::string& process_name) {
+        Logger::log("INFO", "Killing process: " + process_name);
         std::string cmd = "pkill -f " + process_name;
         system(cmd.c_str());
     }
@@ -57,9 +91,11 @@ public:
         for (const auto& [pkg, procs] : initial_targets) {
             targets.emplace_back(pkg, procs);
         }
+        Logger::log("INFO", "ProcessManager initialized with " + std::to_string(targets.size()) + " targets");
     }
 
     void start() {
+        Logger::log("INFO", "ProcessManager started");
         while (running) {
             for (auto& target : targets) {
                 bool current_foreground = isProcessForeground(target.package_name);
@@ -67,14 +103,17 @@ public:
                 if (!current_foreground && target.is_foreground) {
                     target.is_foreground = false;
                     target.last_background_time = std::chrono::steady_clock::now();
+                    Logger::log("INFO", "Package " + target.package_name + " moved to background");
                 } else if (current_foreground && !target.is_foreground) {
                     target.is_foreground = true;
+                    Logger::log("INFO", "Package " + target.package_name + " moved to foreground");
                     continue;
                 }
 
                 if (!target.is_foreground) {
                     auto now = std::chrono::steady_clock::now();
                     if (now - target.last_background_time >= BACKGROUND_THRESHOLD) {
+                        Logger::log("INFO", "Killing background processes for " + target.package_name);
                         for (const auto& proc : target.process_names) {
                             killProcess(proc);
                         }
@@ -91,7 +130,11 @@ public:
 };
 
 int main(int argc, char* argv[]) {
+    Logger::init();
+    Logger::log("INFO", "Process manager starting...");
+
     if (argc < 3) {
+        Logger::log("ERROR", "Invalid arguments count: " + std::to_string(argc));
         std::cerr << "Usage: " << argv[0] << " [-d] <package_name> <process_name_1> [<process_name_2> ...]\n";
         return 1;
     }
@@ -132,5 +175,7 @@ int main(int argc, char* argv[]) {
     ProcessManager manager(std::move(targets));
     manager.start();
 
+    Logger::log("INFO", "Process manager shutting down");
+    Logger::close();
     return 0;
 }
