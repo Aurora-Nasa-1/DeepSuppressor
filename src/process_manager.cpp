@@ -8,25 +8,37 @@
 #include <unistd.h>
 #include <fstream>
 #include <ctime>
+#include <filesystem>
 
-// 添加简单的日志类
 class Logger {
 private:
     static std::ofstream log_file;
+    static void ensureDirectoryExists(const std::string& path) {
+        std::filesystem::path dir = std::filesystem::path(path).parent_path();
+        if (!std::filesystem::exists(dir)) {
+            std::filesystem::create_directories(dir);
+        }
+    }
 
 public:
     static void init() {
-        log_file.open("/data/adb/modules/AMMF/logs/process_manager.log", 
-                     std::ios::out | std::ios::app);
+        const std::string log_path = "/data/adb/modules/DeepSuppressor/logs/process_manager.log";
+        ensureDirectoryExists(log_path);
+        log_file.open(log_path, std::ios::out | std::ios::app);
     }
 
     static void log(const std::string& level, const std::string& message) {
         if (!log_file.is_open()) return;
         
-        auto now = std::chrono::system_clock::now();
-        auto time = std::chrono::system_clock::to_time_t(now);
-        log_file << std::ctime(&time) << "[" << level << "] " << message << std::endl;
+        time_t now = time(nullptr);
+        std::string time_str = ctime(&now);
+        time_str = time_str.substr(0, time_str.length() - 1); // 移除换行符
+        
+        log_file << time_str << " [" << level << "] " << message << std::endl;
         log_file.flush();
+        
+        // 同时输出到控制台
+        std::cout << time_str << " [" << level << "] " << message << std::endl;
     }
 
     static void close() {
@@ -57,67 +69,84 @@ private:
     static constexpr auto BACKGROUND_THRESHOLD = std::chrono::seconds(10);
     static constexpr auto CHECK_INTERVAL = std::chrono::seconds(5);
 
-    static std::string exec(const char* cmd) {
-        char buffer[128];
+    static std::string exec(const std::string& cmd) {
+        std::array<char, 128> buffer;
         std::string result;
-        FILE* pipe = popen(cmd, "r");
-        if (!pipe) return "";
         
-        while (!feof(pipe)) {
-            if (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-                result += buffer;
-            }
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            Logger::log("ERROR", "Failed to execute command: " + cmd);
+            return "";
         }
+        
+        while (fgets(buffer.data(), buffer.size(), pipe) != nullptr) {
+            result += buffer.data();
+        }
+        
         pclose(pipe);
         return result;
     }
 
     bool isProcessForeground(const std::string& package_name) {
         std::string cmd = "dumpsys activity activities | grep -E 'mResumedActivity|mFocusedActivity' | grep " + package_name;
-        bool result = !exec(cmd.c_str()).empty();
-        Logger::log("DEBUG", "Package " + package_name + " foreground check: " + (result ? "true" : "false"));
-        return result;
+        return !exec(cmd).empty();
+    }
+
+    bool isProcessRunning(const std::string& process_name) {
+        std::string cmd = "ps -A | grep \"" + process_name + "\" | grep -v grep";
+        return !exec(cmd).empty();
     }
 
     void killProcess(const std::string& process_name) {
-        Logger::log("INFO", "Killing process: " + process_name);
-        std::string cmd = "pkill -f " + process_name;
-        system(cmd.c_str());
+        if (isProcessRunning(process_name)) {
+            std::string cmd = "killall -9 " + process_name;
+            if (system(cmd.c_str()) == 0) {
+                Logger::log("INFO", "Successfully killed process: " + process_name);
+            } else {
+                Logger::log("ERROR", "Failed to kill process: " + process_name);
+            }
+        }
     }
 
 public:
-    ProcessManager(std::vector<std::pair<std::string, std::vector<std::string>>> initial_targets) {
-        targets.reserve(initial_targets.size());
+    explicit ProcessManager(const std::vector<std::pair<std::string, std::vector<std::string>>>& initial_targets) {
         for (const auto& [pkg, procs] : initial_targets) {
-            targets.emplace_back(pkg, procs);
+            if (!pkg.empty() && !procs.empty()) {
+                targets.emplace_back(pkg, procs);
+                Logger::log("INFO", "Added target: " + pkg + " with " + 
+                          std::to_string(procs.size()) + " processes");
+            }
         }
-        Logger::log("INFO", "ProcessManager initialized with " + std::to_string(targets.size()) + " targets");
     }
 
     void start() {
-        Logger::log("INFO", "ProcessManager started");
+        Logger::log("INFO", "Process manager started with " + std::to_string(targets.size()) + " targets");
+        
         while (running) {
             for (auto& target : targets) {
-                bool current_foreground = isProcessForeground(target.package_name);
-                
-                if (!current_foreground && target.is_foreground) {
-                    target.is_foreground = false;
-                    target.last_background_time = std::chrono::steady_clock::now();
-                    Logger::log("INFO", "Package " + target.package_name + " moved to background");
-                } else if (current_foreground && !target.is_foreground) {
-                    target.is_foreground = true;
-                    Logger::log("INFO", "Package " + target.package_name + " moved to foreground");
-                    continue;
-                }
+                try {
+                    bool current_foreground = isProcessForeground(target.package_name);
+                    
+                    if (!current_foreground && target.is_foreground) {
+                        target.is_foreground = false;
+                        target.last_background_time = std::chrono::steady_clock::now();
+                        Logger::log("INFO", "Package " + target.package_name + " moved to background");
+                    } else if (current_foreground && !target.is_foreground) {
+                        target.is_foreground = true;
+                        Logger::log("INFO", "Package " + target.package_name + " moved to foreground");
+                        continue;
+                    }
 
-                if (!target.is_foreground) {
-                    auto now = std::chrono::steady_clock::now();
-                    if (now - target.last_background_time >= BACKGROUND_THRESHOLD) {
-                        Logger::log("INFO", "Killing background processes for " + target.package_name);
-                        for (const auto& proc : target.process_names) {
-                            killProcess(proc);
+                    if (!target.is_foreground) {
+                        auto now = std::chrono::steady_clock::now();
+                        if (now - target.last_background_time >= BACKGROUND_THRESHOLD) {
+                            for (const auto& proc : target.process_names) {
+                                killProcess(proc);
+                            }
                         }
                     }
+                } catch (const std::exception& e) {
+                    Logger::log("ERROR", "Error processing target " + target.package_name + ": " + e.what());
                 }
             }
             std::this_thread::sleep_for(CHECK_INTERVAL);
@@ -129,75 +158,77 @@ public:
     }
 };
 
+class ArgumentParser {
+public:
+    static std::vector<std::pair<std::string, std::vector<std::string>>> parse(int argc, char* argv[], int start_index) {
+        std::vector<std::pair<std::string, std::vector<std::string>>> result;
+        std::string current_package;
+        std::vector<std::string> current_processes;
+
+        for (int i = start_index; i < argc; ++i) {
+            std::string arg = argv[i];
+            
+            // 如果参数包含冒号，则为进程名
+            if (arg.find(':') != std::string::npos) {
+                if (!current_package.empty()) {
+                    current_processes.push_back(arg);
+                }
+            } else {
+                // 如果已有包名和进程，保存它们
+                if (!current_package.empty() && !current_processes.empty()) {
+                    result.emplace_back(current_package, current_processes);
+                    current_processes.clear();
+                }
+                current_package = arg;
+            }
+        }
+
+        // 添加最后一组
+        if (!current_package.empty() && !current_processes.empty()) {
+            result.emplace_back(current_package, current_processes);
+        }
+
+        return result;
+    }
+};
+
 int main(int argc, char* argv[]) {
-    Logger::init();
-    Logger::log("INFO", "Process manager starting...");
+    try {
+        Logger::init();
+        Logger::log("INFO", "Process manager starting...");
 
-    if (argc < 3) {
-        Logger::log("ERROR", "Invalid arguments count: " + std::to_string(argc));
-        std::cerr << "Usage: " << argv[0] << " [-d] <package_name> <process_name_1> [<process_name_2> ...]\n";
+        if (argc < 3) {
+            Logger::log("ERROR", "Usage: " + std::string(argv[0]) + " [-d] <package_name> <process_name_1> [<process_name_2> ...]");
+            return 1;
+        }
+
+        bool daemon_mode = false;
+        int arg_offset = 1;
+
+        if (strcmp(argv[1], "-d") == 0) {
+            daemon_mode = true;
+            arg_offset = 2;
+            
+            if (fork() > 0) {
+                return 0;
+            }
+            setsid();
+        }
+
+        auto targets = ArgumentParser::parse(argc, argv, arg_offset);
+
+        if (targets.empty()) {
+            Logger::log("ERROR", "No valid targets specified");
+            return 1;
+        }
+
+        ProcessManager manager(targets);
+        manager.start();
+
+    } catch (const std::exception& e) {
+        Logger::log("ERROR", "Fatal error: " + std::string(e.what()));
         return 1;
     }
-
-    bool daemon_mode = false;
-    int arg_offset = 1;
-
-    if (strcmp(argv[1], "-d") == 0) {
-        daemon_mode = true;
-        arg_offset = 2;
-        
-        if (daemon_mode && fork() > 0) {
-            return 0;
-        }
-    }
-
-    std::vector<std::pair<std::string, std::vector<std::string>>> targets;
-    std::string current_package;
-    std::vector<std::string> current_processes;
-    
-    for (int i = arg_offset; i < argc; i++) {
-        std::string arg = argv[i];
-        
-        // 检查是否是包名（不包含 ':' 但包含 '.'）
-        if (arg.find(':') == std::string::npos && arg.find('.') != std::string::npos) {
-            // 如果已经有一个包和进程，保存它们
-            if (!current_package.empty() && !current_processes.empty()) {
-                targets.emplace_back(current_package, current_processes);
-                current_processes.clear();
-            }
-            current_package = arg;
-            Logger::log("DEBUG", "New package: " + current_package);
-        } else {
-            // 这是一个进程名
-            if (!current_package.empty()) {
-                current_processes.push_back(arg);
-                Logger::log("DEBUG", "Added process: " + arg + " to package: " + current_package);
-            }
-        }
-    }
-    
-    // 添加最后一组包和进程
-    if (!current_package.empty() && !current_processes.empty()) {
-        targets.emplace_back(current_package, current_processes);
-    }
-
-    if (targets.empty()) {
-        Logger::log("ERROR", "No valid targets specified");
-        std::cerr << "No valid targets specified\n";
-        return 1;
-    }
-
-    // 输出解析结果到日志
-    for (const auto& [pkg, procs] : targets) {
-        std::string proc_list;
-        for (const auto& proc : procs) {
-            proc_list += proc + " ";
-        }
-        Logger::log("INFO", "Monitoring package: " + pkg + " with processes: " + proc_list);
-    }
-
-    ProcessManager manager(std::move(targets));
-    manager.start();
 
     Logger::log("INFO", "Process manager shutting down");
     Logger::close();
