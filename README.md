@@ -2,8 +2,8 @@
 
 ## 项目简介
 **DeepSuppressor 是一个高效的后台进程管理工具，专为Android设备设计，用于监控和控制在后台运行的应用程序进程。**
-本模块基于 [Aurora-Magisk-Modules-Framework-2](https://github.com/Aurora-Nasa-1/AMMF2) 开发
-你也可以把它看作是一个AMMF模块开发示例(由AI辅助开发)
+
+本模块基于 [Aurora-Magisk-Modules-Framework-2](https://github.com/Aurora-Nasa-1/AMMF2) 开发,你也可以把它看作是一个AMMF模块开发示例(由AI辅助开发)
 
 ## 主要功能
 - 以低耗电低占用的方式，监控并压制后台进程。
