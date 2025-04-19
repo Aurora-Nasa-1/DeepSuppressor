@@ -53,7 +53,7 @@ log() {
     [ "$level" -gt "$LOG_LEVEL" ] && return 0
     [ "$LOGGER_INITIALIZED" != "1" ] && init_logger
     
-    "$LOGMONITOR_BIN" -c write -n "$log_name" -m "$message" -l "$level"
+    "$LOGMONITOR_BIN" -c write -n "$LOG_FILE_NAME" -m "$message" -l "$level"
 }
 
 log_error() { log 1 "$1"; }
