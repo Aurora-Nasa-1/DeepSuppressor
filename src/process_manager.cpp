@@ -138,19 +138,25 @@ private:
         return foreground;
     }
 
-    bool isProcessRunning(const std::string& process_name) {
-        std::string cmd = "ps -A | grep \"" + process_name + "\" | grep -v grep";
+    // 检查特定包名的特定进程是否在运行
+    bool isProcessRunning(const std::string& process_name, const std::string& package_name) {
+        // 使用ps命令获取进程信息，并检查是否包含包名和进程名
+        std::string cmd = "ps -A | grep \"" + process_name + "\" | grep \"" + package_name + "\" | grep -v grep";
         return !exec(cmd).empty();
     }
 
-    void killProcess(const std::string& process_name) {
-        if (isProcessRunning(process_name)) {
-            std::string cmd = "killall -9 " + process_name;
+    void killProcess(const std::string& process_name, const std::string& package_name) {
+        if (isProcessRunning(process_name, package_name)) {
+            // 使用更精确的方式杀死进程，确保只杀死特定包名的进程
+            std::string cmd = "ps -A | grep \"" + process_name + "\" | grep \"" + package_name + 
+                             "\" | grep -v grep | awk '{print $2}' | xargs kill -9";
             if (system(cmd.c_str()) == 0) {
-                Logger::log("INFO", "Successfully killed process: " + process_name);
+                Logger::log("INFO", "Successfully killed process: " + process_name + " for package: " + package_name);
             } else {
-                Logger::log("ERROR", "Failed to kill process: " + process_name);
+                Logger::log("ERROR", "Failed to kill process: " + process_name + " for package: " + package_name);
             }
+        } else {
+            Logger::log("DEBUG", "Process: " + process_name + " for package: " + package_name + " is not running");
         }
     }
 
@@ -194,16 +200,25 @@ public:
                         // 之前已经在后台, 或者刚切换到后台
                         auto now = std::chrono::steady_clock::now();
                         if (!target.is_foreground && (now - target.last_background_time >= BACKGROUND_THRESHOLD)) {
-                            Logger::log("INFO", "Background threshold met for " + target.package_name + ". Killing processes.");
-                            for (const auto& proc : target.process_names) {
-                                killProcess(proc);
+                            Logger::log("INFO", "Background threshold met for " + target.package_name + ". Checking and killing processes.");
+                            
+                            // 再次确认应用确实在后台
+                            if (!isProcessForeground(target.package_name)) {
+                                for (const auto& proc : target.process_names) {
+                                    // 确保只杀死属于该包名的进程
+                                    killProcess(proc, target.package_name);
+                                }
+                                // 重置计时器，避免频繁杀死进程
+                                target.last_background_time = now;
+                                Logger::log("INFO", "Reset background timer for " + target.package_name);
+                            } else {
+                                Logger::log("INFO", "Package " + target.package_name + " is now in foreground, skipping kill");
+                                target.is_foreground = true;
                             }
-                            // 注意：这里杀死后，下次检查如果仍在后台且超过时间会再次尝试杀死
-                            // 如果希望只杀死一次，可以在杀死后重置时间或移除目标
                         }
                     }
                 } catch (const std::exception& e) {
-                    Logger::log("ERROR", "Error processing target " + target.package_name + ": "e.what());
+                    Logger::log("ERROR", "Error processing target " + target.package_name + ": " + std::string(e.what()));
                 }
             }
             std::this_thread::sleep_for(CHECK_INTERVAL);
@@ -259,13 +274,12 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        bool daemon_mode = false;
         int arg_offset = 1;
 
         if (strcmp(argv[1], "-d") == 0) {
-            daemon_mode = true;
+            // daemon_mode is implicitly handled by the fork logic
             arg_offset = 2;
-            
+
             if (fork() > 0) {
                 return 0;
             }
