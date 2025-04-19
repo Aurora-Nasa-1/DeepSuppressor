@@ -152,24 +152,48 @@ int main(int argc, char* argv[]) {
     }
 
     std::vector<std::pair<std::string, std::vector<std::string>>> targets;
-    int i = arg_offset;
+    std::string current_package;
+    std::vector<std::string> current_processes;
     
-    while (i < argc) {
-        std::string package_name = argv[i++];
-        std::vector<std::string> process_names;
+    for (int i = arg_offset; i < argc; i++) {
+        std::string arg = argv[i];
         
-        while (i < argc && strchr(argv[i], '.') == nullptr) {
-            process_names.push_back(argv[i++]);
+        // 检查是否是包名（不包含 ':' 但包含 '.'）
+        if (arg.find(':') == std::string::npos && arg.find('.') != std::string::npos) {
+            // 如果已经有一个包和进程，保存它们
+            if (!current_package.empty() && !current_processes.empty()) {
+                targets.emplace_back(current_package, current_processes);
+                current_processes.clear();
+            }
+            current_package = arg;
+            Logger::log("DEBUG", "New package: " + current_package);
+        } else {
+            // 这是一个进程名
+            if (!current_package.empty()) {
+                current_processes.push_back(arg);
+                Logger::log("DEBUG", "Added process: " + arg + " to package: " + current_package);
+            }
         }
-        
-        if (!process_names.empty()) {
-            targets.emplace_back(package_name, process_names);
-        }
+    }
+    
+    // 添加最后一组包和进程
+    if (!current_package.empty() && !current_processes.empty()) {
+        targets.emplace_back(current_package, current_processes);
     }
 
     if (targets.empty()) {
+        Logger::log("ERROR", "No valid targets specified");
         std::cerr << "No valid targets specified\n";
         return 1;
+    }
+
+    // 输出解析结果到日志
+    for (const auto& [pkg, procs] : targets) {
+        std::string proc_list;
+        for (const auto& proc : procs) {
+            proc_list += proc + " ";
+        }
+        Logger::log("INFO", "Monitoring package: " + pkg + " with processes: " + proc_list);
     }
 
     ProcessManager manager(std::move(targets));
