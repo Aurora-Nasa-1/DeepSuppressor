@@ -93,6 +93,11 @@ private:
     }
 };
 
+// Initialize static members
+std::ofstream Logger::log_file;
+std::deque<std::string> Logger::log_buffer;
+std::mutex Logger::log_mutex;
+
 // 系统命令执行器
 class CommandExecutor {
 public:
@@ -235,11 +240,6 @@ private:
             target.needs_check = false;
         }
     }
-
-    // 在Logger类定义之后添加静态成员初始化
-    std::ofstream Logger::log_file;
-    std::deque<std::string> Logger::log_buffer;
-    std::mutex Logger::log_mutex;
 
     // 修复handleBackgroundServices方法
     void handleBackgroundServices(Target& target, 
