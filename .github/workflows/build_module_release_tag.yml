@@ -90,8 +90,8 @@ jobs:
       - name: Compress files
         run: |
           LATEST_TAG=$(cat latest_tag.txt)
-          . ./settings/settings.sh
-          7z a -r -mx9 "${action_name}_${LATEST_TAG}.zip" * -x!*.git* -x!*.zip -x!latest_tag.txt -x!current_time.txt -x!requirements.txt
+          . ./module_settings/configs.sh
+          7z a -r -mx9 "${action_name}_${LATEST_TAG}.zip" * -x!*.git* -x!*.zip -x!latest_tag.txt
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
