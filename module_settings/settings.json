@@ -1,25 +1,12 @@
 {
   "excluded": [
-    "MODULE_ID",
-    "MODULE_NAME",
-    "MODULE_DES",
-    "CustomScript",
-    "max_retries",
-    "MODULE_AUTHOR",
-    "SDCARD",
-    "CustomScriptPath",
-    "langpath",
-    "script_path",
     "magisk_min_version",
     "ksu_min_version",
     "ksu_min_kernel_version",
-    "user_script_path",
     "apatch_min_version",
     "ANDROID_API",
-    "action_id",
-    "action_name",
-    "action_author",
-    "action_description"
+    "TEST_*",
+    "action_*"
   ],
   "descriptions": {
     "print_languages": {

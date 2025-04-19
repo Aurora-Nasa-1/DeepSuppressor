@@ -73,20 +73,36 @@ const SettingsPage = {
             </div>
         `;
     },
-
+    isExcluded(key) {
+        return this.excludedSettings.some(pattern => {
+            // 如果模式包含通配符
+            if (pattern.includes('*')) {
+                // 将通配符转换为正则表达式
+                const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+                return regex.test(key);
+            }
+            // 无通配符时直接比较
+            return pattern === key;
+        });
+    },
     // 渲染设置项
     renderSettings() {
         if (!this.settings || Object.keys(this.settings).filter(key => !key.startsWith('_')).length === 0) {
-            // 如果没有可用设置，提供测试数据
             this.settings = this.getTestSettings();
             this.createSettingsBackup();
         }
 
         let html = '';
 
-        // 按字母顺序排序设置项，过滤掉内部属性和排除项
+        // 修改排序和过滤逻辑
         const sortedSettings = Object.keys(this.settings)
-            .filter(key => !key.startsWith('_') && !this.excludedSettings.includes(key))
+            .filter(key => {
+                // 跳过内部属性
+                if (key.startsWith('_')) return false;
+
+                // 检查是否匹配任何排除规则
+                return !this.isExcluded(key);
+            })
             .sort();
 
         for (const key of sortedSettings) {
@@ -109,20 +125,26 @@ const SettingsPage = {
             // 布尔值设置
             ENABLE_FEATURE_A: true,
             ENABLE_FEATURE_B: false,
-
+            
             // 数字设置
             SERVER_PORT: 8080,
-
+            
             // 文本设置
             API_KEY: "test_api_key_12345",
-
+            
             // 选择项设置
             LOG_LEVEL: "info",
             THEME: "auto",
-
+            
             // 数字滑条设置
             VOLUME: 75,
-            BRIGHTNESS: 80
+            BRIGHTNESS: 80,
+            
+            // 添加测试排除项
+            APP_TEST_1: "should_be_excluded",
+            APP_TEST_2: "should_be_excluded",
+            SYSTEM_TEMP: "should_be_excluded",
+            ACTION_TEST: "should_be_excluded"
         };
     },
 
@@ -169,10 +191,10 @@ const SettingsPage = {
     // 渲染文本控件
     renderTextControl(key, value, description) {
         // 确保值是字符串并进行HTML转义
-        const safeValue = typeof value === 'string' 
+        const safeValue = typeof value === 'string'
             ? this.escapeHtml(value)
             : value;
-    
+
         return `
             <label>
                 <span>${description}</span>
@@ -271,7 +293,7 @@ const SettingsPage = {
     parseConfigFile(content) {
         const settings = {};
         const lines = content.split('\n');
-        
+
         // 存储原始配置信息，用于保存时恢复格式
         settings._configInfo = {
             lines: lines,
@@ -307,7 +329,7 @@ const SettingsPage = {
                 };
 
                 // 如果值带有引号，去除引号用于内部处理
-                if (settings._configInfo.formats[key].hasDoubleQuotes || 
+                if (settings._configInfo.formats[key].hasDoubleQuotes ||
                     settings._configInfo.formats[key].hasSingleQuotes) {
                     value = value.substring(1, value.length - 1);
                 }
@@ -379,7 +401,7 @@ const SettingsPage = {
             VOLUME: { zh: "音量", en: "Volume" },
             BRIGHTNESS: { zh: "亮度", en: "Brightness" }
         };
-
+    
         // 设置选项配置
         this.settingsOptions = {
             LOG_LEVEL: {
@@ -398,6 +420,13 @@ const SettingsPage = {
                 ]
             }
         };
+    
+        // 添加测试排除规则
+        this.excludedSettings = [
+            "APP_*",      // 排除所有以APP_开头的设置项
+            "SYSTEM_TEMP", // 精确排除SYSTEM_TEMP
+            "ACTION_*"    // 排除所有以ACTION_开头的设置项
+        ];
     },
 
     // 保存设置
@@ -445,7 +474,7 @@ const SettingsPage = {
 
             // 生成新的配置文件内容
             let configContent = '';
-            
+
             // 首先处理排除项，保持它们原样
             const excludedLines = new Set();
             if (this.settings._configInfo.lines) {
@@ -457,7 +486,7 @@ const SettingsPage = {
                     }
                 }
             }
-            
+
             // 然后处理更新的设置项
             for (const key in updatedSettings) {
                 let value = updatedSettings[key];
@@ -496,19 +525,19 @@ const SettingsPage = {
 
             // 更新本地设置
             const configInfo = this.settings._configInfo;
-            
+
             // 更新设置对象，保留内部属性
             for (const key in this.settings) {
                 if (!key.startsWith('_')) {
                     delete this.settings[key];
                 }
             }
-            
+
             // 添加更新后的设置
             for (const key in updatedSettings) {
                 this.settings[key] = updatedSettings[key];
             }
-            
+
             // 保留配置信息
             this.settings._configInfo = configInfo;
 
@@ -547,7 +576,7 @@ const SettingsPage = {
 
         // 恢复设置
         this.settings = JSON.parse(JSON.stringify(this.settingsBackup));
-        
+
         // 恢复配置信息
         if (configInfo) {
             this.settings._configInfo = configInfo;
@@ -757,13 +786,13 @@ const SettingsPage = {
                     <span class="material-symbols-rounded">save</span>
                 </button>
             `;
-            
+
             // 绑定还原按钮事件
             const restoreButton = document.getElementById('restore-settings');
             if (restoreButton) {
                 restoreButton.addEventListener('click', () => this.restoreSettings());
             }
-            
+
             // 绑定刷新按钮事件
             const refreshButton = document.getElementById('refresh-settings');
             if (refreshButton) {
@@ -771,7 +800,7 @@ const SettingsPage = {
                     this.refreshSettings();
                 });
             }
-            
+
             // 绑定保存按钮事件
             const saveButton = document.getElementById('save-settings');
             if (saveButton) {
