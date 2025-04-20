@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <!-- 删除 viewport-fit=cover -->
     <meta name="theme-color" content="#006495">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -11,64 +10,10 @@
     <meta name="color-scheme" content="light dark">
     <title>AMMF WebUI</title>
     
-    <!-- 字体预加载 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
-    <!-- 图标 -->
-    <head>
-        <!-- 原有图标链接 -->
-        <link rel="icon" href="favicon.ico" type="image/x-icon">
-        <link rel="apple-touch-icon" href="icon-192.png">
-        
-        <!-- 添加备用图标加载脚本 -->
-        <script>
-            document.addEventListener('DOMContentLoaded', function() {
-                // 检查图标是否加载失败
-                const checkIconsLoaded = () => {
-                    const icons = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]');
-                    let allLoaded = true;
-                    
-                    icons.forEach(icon => {
-                        if (!icon.sheet && !icon.href.startsWith('data:')) {
-                            allLoaded = false;
-                        }
-                    });
-                    
-                    if (!allLoaded) {
-                        loadFallbackIcons();
-                    }
-                };
-                
-                // 使用wget下载备用图标
-                const loadFallbackIcons = () => {
-                    try {
-                        // 使用execCommand执行wget下载
-                        const wgetCommand = `wget https://raw.githubusercontent.com/your-repo/AMMF2/main/webroot/icon-192.png -O icon-192.png && wget https://raw.githubusercontent.com/your-repo/AMMF2/main/webroot/favicon.ico -O favicon.ico`;
-                        document.execCommand(wgetCommand);
-                        
-                        // 重新加载图标
-                        setTimeout(() => {
-                            const favicon = document.querySelector('link[rel="icon"]');
-                            const appleIcon = document.querySelector('link[rel="apple-touch-icon"]');
-                            
-                            if (favicon) favicon.href = 'favicon.ico?' + Date.now();
-                            if (appleIcon) appleIcon.href = 'icon-192.png?' + Date.now();
-                        }, 1000);
-                    } catch (e) {
-                        console.error('Failed to load fallback icons:', e);
-                    }
-                };
-                
-                // 延迟检查以确保有足够时间加载
-                setTimeout(checkIconsLoaded, 2000);
-            });
-        </script>
-    </head>
-    
-    <!-- 预加载样式，防止主题闪烁 -->
-    <!-- 在head标签内的style部分添加或修改以下样式 -->
+    <!-- Material Design 字体和图标 -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+    <!-- 预加载样式 -->
     <style>
         .app-header, .app-nav, #main-content {
             opacity: 1;
@@ -77,30 +22,23 @@
         .app-loaded .app-header, .app-loaded .app-nav, .app-loaded #main-content {
             opacity: 1;
         }
+
         html, body {
             overscroll-behavior: none;
             background-color: var(--md-background);
-            /* 添加移动端滚动条隐藏 */
             -webkit-overflow-scrolling: touch;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            height: 100%; /* 确保高度为100% */
-            position: relative; /* 添加相对定位 */
+            height: 100%;
+            position: relative;
         }
-        
-        /* 确保主内容区域可以滚动到底部 */
-        #main-content {
-            padding-bottom: 120px !important; /* 强制添加足够的底部内边距 */
-        }
-        
-        /* 隐藏滚动条 */
+    
         html::-webkit-scrollbar, body::-webkit-scrollbar {
             display: none;
             width: 0;
             height: 0;
         }
         
-        /* 添加基本加载样式 */
         .loading-container {
             display: flex;
             justify-content: center;
@@ -121,34 +59,11 @@
         }
     </style>
     
-    <!-- 字体 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&family=Roboto+Mono:wght@300;400;500&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
-    <!-- 添加 Google Material Symbols 图标 -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    
-    <!-- 主题脚本 - 在样式表之前加载，防止闪烁 -->
+    <!-- 主题脚本 -->
     <script src="theme.js"></script>
     
-    <!-- CSS加载器 - 用于动态加载CSS -->
+    <!-- CSS加载器 -->
     <script src="css-loader.js"></script>
-    <!-- 样式表将由CSS加载器动态加载 -->
-    <script>
-        // 检查是否有权限加载 Eruda
-        if (window.Core && Core.hasPermission && Core.hasPermission('webui.permission.ERUDA')) {
-            // 动态加载 Eruda
-            (function() {
-                var script = document.createElement('script');
-                script.src = "https://cdn.jsdelivr.net/npm/eruda";
-                document.head.appendChild(script);
-                script.onload = function() {
-                    eruda.init();
-                    console.log('Eruda 调试工具已加载');
-                }
-            })();
-        }
-    </script>
 </head>
 <body>
     <div id="app">
@@ -159,15 +74,10 @@
                     <h1 id="page-title">AMMF WebUI</h1>
                 </div>
                 <div class="header-actions">
-                    <!-- 页面特定操作按钮容器 -->
                     <div id="page-actions" class="page-actions"></div>
-                    
-                    <!-- 语言切换按钮 -->
                     <button id="language-button" class="icon-button" title="语言">
                         <span class="material-symbols-rounded">translate</span>
                     </button>
-                    
-                    <!-- 主题切换按钮 -->
                     <button id="theme-toggle" class="icon-button" title="主题">
                         <span class="material-symbols-rounded">light_mode</span>
                     </button>
@@ -177,7 +87,6 @@
         
         <!-- 主内容区域 -->
         <main id="main-content">
-            <!-- 内容将由JavaScript动态加载 -->
             <div class="loading-container">
                 <div class="spinner"></div>
                 <p data-i18n="LOADING">加载中...</p>
@@ -212,9 +121,7 @@
                 <div class="language-selector-header">
                     <h3 data-i18n="SELECT_LANGUAGE">选择语言</h3>
                 </div>
-                <div id="language-options" class="language-options">
-                    <!-- 语言选项将由JavaScript动态加载 -->
-                </div>
+                <div id="language-options" class="language-options"></div>
                 <div class="language-selector-footer">
                     <button id="cancel-language" class="icon-button" data-i18n="CANCEL">取消</button>
                 </div>
@@ -230,11 +137,9 @@
     <script src="theme.js"></script>
     <script src="i18n.js"></script>
     
-    <!-- 条件加载MMRL API -->
+    <!-- MMRL API -->
     <script>
-        // 检测是否为MMRL环境
         if (window.MMRL) {
-            // 如果是MMRL环境，加载MMRL相关脚本
             const mmrlScript = document.createElement('script');
             mmrlScript.src = 'mmrl.js';
             document.head.appendChild(mmrlScript);
@@ -250,20 +155,15 @@
     <!-- 主应用脚本 -->
     <script src="app.js"></script>
     <script>
-      // 防止布局偏移
-      document.addEventListener('DOMContentLoaded', function() {
-        // 强制重新计算布局
-        document.body.offsetHeight;
-        
-        // 监听页面切换事件
-        document.addEventListener('pageChanged', function() {
-          // 确保页面容器样式一致
-          const containers = document.querySelectorAll('.page-container');
-          containers.forEach(container => {
-            container.style.transition = 'none';
-          });
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.offsetHeight;
+            document.addEventListener('pageChanged', function() {
+                const containers = document.querySelectorAll('.page-container');
+                containers.forEach(container => {
+                    container.style.transition = 'none';
+                });
+            });
         });
-      });
     </script>
-    </body>
-    </html>
+</body>
+</html>
