@@ -63,11 +63,7 @@ private:
     static void formatTime() noexcept {
         auto now = std::chrono::system_clock::now();
         auto time = std::chrono::system_clock::to_time_t(now);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now.time_since_epoch()).count() % 1000;
-
         strftime(time_buffer, sizeof(time_buffer), "%Y-%m-%d %H:%M:%S", localtime(&time));
-        sprintf(time_buffer + 19, ".%03d", static_cast<int>(ms));
     }
 
     static void writeToFile() noexcept {
