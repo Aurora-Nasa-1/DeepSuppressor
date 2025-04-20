@@ -166,20 +166,29 @@ struct AppStats {
     int total_background_time{ 0 };
     int switch_count{ 0 };
     double importance_weight{ 0.0 };
+    int last_usage_hour{ -1 };
+    double usage_pattern_score{ 0.0 };
     std::chrono::steady_clock::time_point last_foreground_time;
     std::chrono::steady_clock::time_point last_background_time;
 
-    void updateForegroundTime(int duration) {
+    void updateForegroundTime(int duration, int hour) {
         total_foreground_time += duration;
         usage_count++;
+        last_usage_hour = hour;
+        updateUsagePatternScore();
     }
 
     void updateBackgroundTime(int duration) {
         total_background_time += duration;
     }
 
+    void updateUsagePatternScore() {
+        usage_pattern_score = (usage_count * 0.3) + (total_foreground_time / 3600.0 * 0.4) + (switch_count * 0.3);
+    }
+
     void updateImportanceWeight() {
-        importance_weight = (usage_count * 0.4) + (total_foreground_time / 3600.0 * 0.3) + (switch_count * 0.3);
+        importance_weight = (usage_pattern_score * 0.6) + (total_foreground_time / 3600.0 * 0.4);
+        importance_weight = std::min(100.0, importance_weight);
     }
 };
 
@@ -247,11 +256,11 @@ public:
             return PROCESS_CHECK_INTERVAL_DEFAULT;
         }
         double importance = it->second.importance_weight;
-        int interval = static_cast<int>(
+        auto interval = static_cast<long long>(
             PROCESS_CHECK_INTERVAL_MAX.count() -
             (PROCESS_CHECK_INTERVAL_MAX - PROCESS_CHECK_INTERVAL_MIN).count() * (importance / 100.0)
         );
-        interval = std::max(interval, PROCESS_CHECK_INTERVAL_MIN.count());
+        interval = std::max(interval, static_cast<long long>(PROCESS_CHECK_INTERVAL_MIN.count()));
         return std::chrono::seconds(interval);
     }
 
@@ -261,11 +270,11 @@ public:
             return KILL_INTERVAL_DEFAULT;
         }
         double importance = it->second.importance_weight;
-        int interval = static_cast<int>(
+        auto interval = static_cast<long long>(
             KILL_INTERVAL_MIN.count() +
             (KILL_INTERVAL_MAX - KILL_INTERVAL_MIN).count() * (importance / 100.0)
         );
-        interval = std::min(interval, KILL_INTERVAL_MAX.count());
+        interval = std::min(interval, static_cast<long long>(KILL_INTERVAL_MAX.count()));
         return std::chrono::seconds(interval);
     }
 
@@ -293,12 +302,18 @@ public:
 
     void updateAppStats(const std::string& package_name, bool is_foreground, int duration) {
         auto& stats = habits.app_stats[package_name];
+        auto now = std::chrono::system_clock::now();
+        auto tt = std::chrono::system_clock::to_time_t(now);
+        int hour = localtime(&tt)->tm_hour;
+
         if (is_foreground) {
-            stats.updateForegroundTime(duration);
+            stats.updateForegroundTime(duration, hour);
         } else {
             stats.updateBackgroundTime(duration);
         }
+        stats.switch_count++;
         stats.updateImportanceWeight();
+        habits.app_switch_frequency++;
         updateHabits();
     }
 
@@ -307,6 +322,11 @@ public:
             habits.screen_on_duration_avg * (1 - habits.learning_weight) +
             duration * habits.learning_weight
         );
+        if (is_screen_on) {
+            for (auto& [pkg, stats] : habits.app_stats) {
+                stats.updateImportanceWeight();
+            }
+        }
         updateHabits();
     }
 
@@ -363,6 +383,8 @@ private:
                 stats.total_background_time = stats_json["total_background_time"];
                 stats.switch_count = stats_json["switch_count"];
                 stats.importance_weight = stats_json["importance_weight"];
+                stats.last_usage_hour = stats_json["last_usage_hour"];
+                stats.usage_pattern_score = stats_json["usage_pattern_score"];
                 habits.app_stats[pkg] = stats;
             }
             habits.screen_on_duration_avg = j["screen_on_duration_avg"];
@@ -394,6 +416,8 @@ private:
                 stats_json["total_background_time"] = stats.total_background_time;
                 stats_json["switch_count"] = stats.switch_count;
                 stats_json["importance_weight"] = stats.importance_weight;
+                stats_json["last_usage_hour"] = stats.last_usage_hour;
+                stats_json["usage_pattern_score"] = stats.usage_pattern_score;
                 j["app_stats"][pkg] = stats_json;
             }
             j["screen_on_duration_avg"] = habits.screen_on_duration_avg;
@@ -644,7 +668,7 @@ int main(int argc, char* argv[]) {
         Logger::log(Logger::Level::INFO, "Process manager starting...");
 
         if (argc < 3) {
-            Logger::log(Logger::Level::ERROR, std::format("Usage: {} [-d] <package_name> <process_name_1> [<process_name_2> ...]", argv[0]));
+ elegido Logger::log(Logger::Level::ERROR, std::format("Usage: {} [-d] <package_name> <process_name_1> [<process_name_2> ...]", argv[0]));
             return 1;
         }
 
