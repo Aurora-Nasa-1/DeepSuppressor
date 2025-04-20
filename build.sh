@@ -427,6 +427,15 @@ EOF
 
 # Compilation function
 compile_binaries() {
+    # 添加下载json.hpp的逻辑
+    log_info "Downloading json.hpp..."
+    mkdir -p src/nlohmann
+    if [ $IS_WINDOWS -eq 1 ]; then
+        powershell.exe -Command "\$ProgressPreference='SilentlyContinue'; Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp' -OutFile '$(convert_path "src/nlohmann/json.hpp")'"
+    else
+        wget -q https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp -O src/nlohmann/json.hpp
+    fi
+
     local prebuilt_path="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$([ $IS_WINDOWS -eq 1 ] && echo 'windows' || echo 'linux')-x86_64/bin"
     local targets=(aarch64 x86_64)
     local sources=(filewatch logmonitor)
