@@ -190,6 +190,10 @@ const LogsPage = {
             
             // 显示对话框
             dialog.showModal();
+            dialog.style.opacity = '0';
+            requestAnimationFrame(() => {
+                dialog.style.opacity = '1';
+            });
             
             // 处理对话框按钮点击
             return new Promise((resolve, reject) => {
@@ -202,7 +206,7 @@ const LogsPage = {
                         setTimeout(() => {
                             dialog.close();
                             document.body.removeChild(dialog);
-                        }, 120); // 与 fadeOut 动画时长匹配
+                        }, 200); // 与动画时长匹配
 
                         if (action === 'confirm') {
                             try {

@@ -336,3 +336,62 @@
 .color-picker-dialog.closing {
   animation: colorPickerFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
+
+/* 通用弹出动画 */
+@keyframes dialogFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dialogFadeOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* 语言选择器动画 */
+.language-selector {
+  animation: overlayFadeIn 0.2s ease-out forwards;
+}
+
+.language-selector.closing {
+  animation: overlayFadeOut 0.2s ease-out forwards;
+}
+
+.language-selector-content {
+  animation: dialogFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.language-selector-content.closing {
+  animation: dialogFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 日志删除对话框动画 */
+.md-dialog {
+  animation: dialogFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.md-dialog.closing {
+  animation: dialogFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
