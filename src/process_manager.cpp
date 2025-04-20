@@ -167,25 +167,6 @@ private:
     static constexpr int INITIAL_HABIT_THRESHOLD = 30;    // 初始学习阈值
     static constexpr int HABIT_LEARNING_THRESHOLD = 200;  // 最终学习阈值
 
-    // 添加缺失的成员变量
-    std::atomic<bool> running{true};
-    bool is_screen_on{true};
-    std::chrono::seconds current_check_interval{INITIAL_CHECK_INTERVAL};
-    std::chrono::steady_clock::time_point last_screen_check;
-    std::chrono::steady_clock::time_point last_process_check_time;
-    std::vector<Target> targets;
-    
-    struct UserHabits {
-        int foreground_duration_avg{0};    
-        int background_duration_avg{0};    
-        int screen_on_duration_avg{0};     
-        int app_switch_frequency{0};       
-        int background_check_hits{0};      
-        int habit_samples{0};              
-        std::chrono::system_clock::time_point last_update;
-        double learning_weight{0.7};       // 添加学习权重
-    } habits;
-
     // 优化时间常量定义
     static constexpr auto INITIAL_CHECK_INTERVAL = std::chrono::seconds(30);  // 提高初始检测频率
     static constexpr auto MIN_CHECK_INTERVAL = std::chrono::seconds(45);
@@ -207,6 +188,25 @@ private:
             , process_names(std::move(procs))
             , is_foreground(true) {}
     };
+
+    // 添加缺失的成员变量
+    std::atomic<bool> running{true};
+    bool is_screen_on{true};
+    std::chrono::seconds current_check_interval{INITIAL_CHECK_INTERVAL};
+    std::chrono::steady_clock::time_point last_screen_check;
+    std::chrono::steady_clock::time_point last_process_check_time;
+    std::vector<Target> targets;
+    
+    struct UserHabits {
+        int foreground_duration_avg{0};    
+        int background_duration_avg{0};    
+        int screen_on_duration_avg{0};     
+        int app_switch_frequency{0};       
+        int background_check_hits{0};      
+        int habit_samples{0};              
+        std::chrono::system_clock::time_point last_update;
+        double learning_weight{0.7};       // 添加学习权重
+    } habits;
 
     static std::string executeCommand(const std::string& cmd) {
         std::array<char, 128> buffer;

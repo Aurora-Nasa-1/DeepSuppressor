@@ -76,13 +76,13 @@ jobs:
             # 构建aarch64版本
             $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
               $CXXFLAGS -Wall -Wextra -static-libstdc++ \
-              -I src -I src/nlohmann \
+              -I src -I src/ \
               -o "bin/${filename}-aarch64" "$cpp_file"
             
             # 构建x86_64版本
             $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
               $CXXFLAGS -Wall -Wextra -static-libstdc++ \
-              -I src -I src/nlohmann \
+              -I src -I src/ \
               -o "bin/${filename}-x86_64" "$cpp_file"
           done
 
