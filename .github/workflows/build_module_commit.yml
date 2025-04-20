@@ -92,7 +92,7 @@ jobs:
           for binary in bin/*-aarch64 bin/*-x86_64; do
             $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip "$binary" || echo "Failed to strip $binary"
           done
-
+          
       - name: Remove files
         run: |
           rm -rf src
@@ -142,4 +142,3 @@ jobs:
           name: ${{ github.event.repository.name }}_${{ env.SHORT_SHA }}
           path: |
             *
-            META-INF/
