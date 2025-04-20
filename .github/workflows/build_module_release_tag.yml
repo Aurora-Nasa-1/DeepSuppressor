@@ -88,11 +88,6 @@ jobs:
           echo 'exit 0' >> META-INF/com/google/android/update-binary
           chmod 755 META-INF/com/google/android/update-binary
           echo '#MAGISK' > META-INF/com/google/android/updater-script
-          echo 'ui_print("AMMF-based module installation");' >> META-INF/com/google/android/updater-script
-          echo 'run_program("/sbin/mount", "/system");' >> META-INF/com/google/android/updater-script
-          echo 'package_extract_dir("files", "/data/adb/modules/${action_id}");' >> META-INF/com/google/android/updater-script
-          echo 'run_program("/sbin/umount", "/system");' >> META-INF/com/google/android/updater-script
-          echo 'set_metadata("/data/adb/modules/${action_id}", "uid", 0, "gid", 0, "mode", 0755, "capabilities", 0x0, "selabel", "u:object_r:system_file:s0");' >> META-INF/com/google/android/updater-script
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1

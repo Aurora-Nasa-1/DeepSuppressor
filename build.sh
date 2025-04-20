@@ -361,6 +361,50 @@ install_ndk() {
 package_module() {
     local version=$1
     local output_file="${action_name}_${version}.zip"
+    
+    # 添加创建META-INF目录的逻辑
+    log_info "Creating META-INF directory structure..."
+    mkdir -p META-INF/com/google/android
+    
+    # 创建update-binary文件
+    cat > META-INF/com/google/android/update-binary << 'EOF'
+#!/sbin/sh
+umask 022
+ui_print() { echo "$1"; }
+require_new_magisk() {
+  ui_print "********************************"
+  ui_print " Please install Magisk v20.4+! "
+  ui_print "********************************"
+  exit 1
+}
+OUTFD=$2
+ZIPFILE=$3
+mount /data 2>/dev/null
+[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
+. /data/adb/magisk/util_functions.sh
+[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
+ui_print "******************************"
+ui_print " Installing ${action_name} module "
+ui_print "******************************"
+extract "$ZIPFILE" "module.prop" "$MODPATH"
+extract "$ZIPFILE" "system.prop" "$MODPATH"
+mkdir -p "$MODPATH/bin"
+extract "$ZIPFILE" "bin/*" "$MODPATH/bin"
+set_perm_recursive "$MODPATH" 0 0 0755 0644
+set_perm_recursive "$MODPATH/bin" 0 2000 0755 0755
+mkdir -p "/data/adb/modules/${action_id}/logs"
+mkdir -p "/data/adb/modules/${action_id}/module_settings"
+set_perm_recursive "/data/adb/modules/${action_id}/logs" 0 0 0755 0644
+ui_print "Installation complete!"
+ui_print "Please reboot your device"
+install_module
+exit 0
+EOF
+
+    # 创建updater-script文件
+    echo '#MAGISK' > META-INF/com/google/android/updater-script
+    chmod 755 META-INF/com/google/android/update-binary
+
     log_info "Packaging module..."
     if [ $IS_WINDOWS -eq 1 ]; then
         # 使用 PowerShell 的改进版本
