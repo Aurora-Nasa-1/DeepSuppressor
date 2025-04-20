@@ -51,7 +51,7 @@ jobs:
           find src -name "*.cpp" -exec sed -i "s/AMMF2/${action_id}/g" {} \;
           sed -i "s/AMMF/${action_id}/g" webroot/index.html
           echo "已完成模块ID替换"
-          
+
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
         with:
@@ -73,14 +73,14 @@ jobs:
             
             # 构建aarch64版本
             $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang++ \
-              -O2 -Wall -Wextra -static-libstdc++ \
-              -I src \
+              $CXXFLAGS -Wall -Wextra -static-libstdc++ \
+              -I src -I src/nlohmann \
               -o "bin/${filename}-aarch64" "$cpp_file"
             
             # 构建x86_64版本
             $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/x86_64-linux-android21-clang++ \
-              -O2 -Wall -Wextra -static-libstdc++ \
-              -I src \
+              $CXXFLAGS -Wall -Wextra -static-libstdc++ \
+              -I src -I src/nlohmann \
               -o "bin/${filename}-x86_64" "$cpp_file"
           done
 

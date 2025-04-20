@@ -6,6 +6,7 @@
 #include <mutex>
 #include <array>
 #include <format>
+#include <thread>
 // 头文件你们好啊，我要开始()了
 #include <nlohmann/json.hpp>
 #include <sys/stat.h>
