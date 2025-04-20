@@ -31,5 +31,6 @@ ui_print "- 按下音量上键关闭智能检测"
 ui_print "- 按下音量下键开启智能检测"
 key_select
 if [ "$key_pressed" = "KEY_VOLUMEUP" ]; then
+    rm -f "$MODPATH/bin/process_manager"
     mv "$MODPATH/bin/process_manager_NOAI" "$MODPATH/bin/process_manager"
 fi
