@@ -573,13 +573,6 @@ select option {
     min-width: 100%;
     display: inline-block;
 }
-.virtual-log-list {
-    position: relative;
-    width: 100%;
-    overflow: hidden;
-    contain: strict; /* 提升渲染性能 */
-    will-change: transform; /* 优化滚动性能 */
-}
 
 .log-content-container {
     position: absolute;
@@ -587,6 +580,27 @@ select option {
     left: 0;
     top: 0;
     contain: content; /* 限制重排范围 */
+}
+
+.virtual-log-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.log-content-viewport {
+    position: absolute;
+    width: 100%;
+    left: 0;
+    top: 0;
+}
+
+.log-line {
+    width: 100%;
+    white-space: pre-wrap;
+    line-height: 20px;
+    min-height: 20px;
 }
 
 .log-line {
@@ -607,6 +621,12 @@ select option {
 }
 
 /* 优化日志级别样式的性能 */
+.log-line-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .log-level {
     display: inline-flex;
     align-items: center;
@@ -614,12 +634,19 @@ select option {
     padding: 2px 8px;
     border-radius: 4px;
     font: var(--label-m);
-    margin-right: 8px;
-    contain: content; /* 提升渲染性能 */
+    white-space: nowrap;
+    flex-shrink: 0;
+    contain: content;
+    justify-content: flex-start;
 }
 
 .log-level .material-symbols-rounded {
     font-size: 16px;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* 错误级别 */
