@@ -54,9 +54,18 @@ jobs:
 
       - name: Setup Android NDK
         uses: nttld/setup-ndk@v1
+        id: setup-ndk
         with:
           ndk-version: r26d
-          local-cache: true
+          add-to-path: false
+          
+      - name: Cache NDK
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.setup-ndk.outputs.ndk-path }}
+          key: ${{ runner.os }}-ndk-r26d-${{ hashFiles('**/build.gradle') }}
+          restore-keys: |
+            ${{ runner.os }}-ndk-r26d-
 
       - name: Download json.hpp
         run: |
