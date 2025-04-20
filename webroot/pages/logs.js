@@ -289,39 +289,145 @@ const LogsPage = {
     },
     
     // 格式化日志内容
+    // 修改 formatLogContent 方法
     formatLogContent() {
         if (!this.logContent || this.logContent.trim() === '') {
             return `<div class="empty-state">${I18n.translate('NO_LOGS', '没有可用的日志')}</div>`;
         }
+    
+        // 将日志分割成行
+        const lines = this.logContent.split('\n');
         
-        let formatted = this.escapeHtml(this.logContent);
+        // 创建虚拟列表容器
+        const virtualList = document.createElement('div');
+        virtualList.className = 'virtual-log-list';
         
-        // 为不同级别的日志添加颜色标识
-        formatted = formatted
-            .replace(/\[(ERROR|WARN|INFO|DEBUG)\]/g, (match, level) => {
-                const levelClass = level.toLowerCase();
-                let icon = '';
+        // 创建实际显示内容的容器
+        const contentContainer = document.createElement('div');
+        contentContainer.className = 'log-content-container';
+        
+        // 初始化虚拟滚动
+        this.initVirtualScroll(lines, virtualList, contentContainer);
+        
+        return virtualList.outerHTML;
+    },
+    
+    // 添加虚拟滚动初始化方法
+    initVirtualScroll(lines, virtualList, contentContainer) {
+        const lineHeight = 20; // 每行高度
+        const visibleLines = Math.ceil(window.innerHeight / lineHeight); // 可见行数
+        const bufferLines = Math.floor(visibleLines / 2); // 缓冲行数
+        
+        // 设置容器总高度
+        virtualList.style.height = `${lines.length * lineHeight}px`;
+        virtualList.style.position = 'relative';
+        
+        let lastScrollTop = 0;
+        let renderTimeout = null;
+        let currentStartIndex = 0;
+        
+        // 渲染可见区域的日志
+        const renderVisibleContent = (startIndex) => {
+            const fragment = document.createDocumentFragment();
+            const endIndex = Math.min(startIndex + visibleLines + bufferLines, lines.length);
+            
+            // 清空现有内容
+            contentContainer.innerHTML = '';
+            
+            // 批量处理日志行
+            for (let i = startIndex; i < endIndex; i++) {
+                const line = lines[i];
+                const lineElement = document.createElement('div');
+                lineElement.className = 'log-line';
+                lineElement.style.position = 'absolute';
+                lineElement.style.top = `${i * lineHeight}px`;
+                lineElement.style.left = '0';
+                lineElement.style.right = '0';
                 
-                switch (levelClass) {
-                    case 'error':
-                        icon = '<span class="material-symbols-rounded">error</span>';
-                        break;
-                    case 'warn':
-                        icon = '<span class="material-symbols-rounded">warning</span>';
-                        break;
-                    case 'info':
-                        icon = '<span class="material-symbols-rounded">info</span>';
-                        break;
-                    case 'debug':
-                        icon = '<span class="material-symbols-rounded">code</span>';
-                        break;
+                // 延迟处理日志级别样式
+                if (line.includes('[ERROR]') || line.includes('[WARN]') || 
+                    line.includes('[INFO]') || line.includes('[DEBUG]')) {
+                    const formattedLine = this.formatLogLine(line);
+                    lineElement.innerHTML = formattedLine;
+                } else {
+                    lineElement.textContent = line;
                 }
                 
-                return `<span class="log-level ${levelClass}">${icon}${level}</span>`;
-            });
+                fragment.appendChild(lineElement);
+            }
             
-        return formatted;
+            contentContainer.appendChild(fragment);
+        };
+        
+        // 处理滚动事件
+        // 优化滚动处理
+        let scrollTicking = false;
+        const scrollContainer = document.getElementById('logs-display-container');
+        if (scrollContainer) {
+            scrollContainer.addEventListener('scroll', (e) => {
+                if (!scrollTicking) {
+                    scrollTicking = true;
+                    const scrollTop = e.target.scrollTop;
+                    
+                    // 使用 RAF 优化滚动性能
+                    requestAnimationFrame(() => {
+                        if (Math.abs(scrollTop - lastScrollTop) > lineHeight) {
+                            lastScrollTop = scrollTop;
+                            handleScroll(scrollTop);
+                        }
+                        scrollTicking = false;
+                    });
+                }
+            }, { passive: true }); // 添加 passive 标志提升滚动性能
+        }
+        
+        // 监听滚动事件
+        const handleScroll = (scrollTop) => {
+            if (renderTimeout) {
+                cancelAnimationFrame(renderTimeout);
+            }
+            
+            renderTimeout = requestAnimationFrame(() => {
+                const newStartIndex = Math.max(0, Math.floor(scrollTop / lineHeight) - bufferLines);
+                
+                if (Math.abs(newStartIndex - currentStartIndex) > bufferLines / 2) {
+                    currentStartIndex = newStartIndex;
+                    renderVisibleContent(newStartIndex);
+                }
+            });
+        };
+        
+        // 初始渲染
+        renderVisibleContent(0);
     },
+    
+    // 添加单行日志格式化方法
+    // 优化日志行渲染
+    formatLogLine(line) {
+    // 缓存正则表达式和图标映射
+    if (!this._logLevelRegex) {
+        this._logLevelRegex = /\[(ERROR|WARN|INFO|DEBUG)\]/;
+        this._iconMap = {
+            'error': 'error',
+            'warn': 'warning',
+            'info': 'info',
+            'debug': 'code'
+        };
+    }
+    
+    const match = line.match(this._logLevelRegex);
+    if (!match) return this.escapeHtml(line);
+    
+    const level = match[1];
+    const levelClass = level.toLowerCase();
+    const icon = `<span class="material-symbols-rounded">${this._iconMap[levelClass]}</span>`;
+    
+    // 使用缓存的正则表达式
+    return this.escapeHtml(line).replace(
+        this._logLevelRegex,
+        `<span class="log-level ${levelClass}">${icon}${level}</span>`
+    );
+},
     
     // 渲染页面
     render() {

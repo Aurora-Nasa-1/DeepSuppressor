@@ -134,7 +134,11 @@ check_ndk() {
     if [ -n "$ANDROID_NDK_HOME" ] && [ -d "$ANDROID_NDK_HOME" ]; then
         local platform=$([ $IS_WINDOWS -eq 1 ] && echo "windows" || echo "linux")
         local test_tool="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/${platform}-x86_64/bin/aarch64-linux-android21-clang++"
-        [ -f "$test_tool" ] && return 0
+        if [ -f "$test_tool" ]; then
+            # 确保文件有执行权限
+            [ $IS_WINDOWS -eq 0 ] && chmod +x "$test_tool"
+            return 0
+        fi
     fi
 
     # Check common installation paths
@@ -383,7 +387,16 @@ compile_binaries() {
     local targets=(aarch64 x86_64)
     local sources=(filewatch logmonitor)
 
+    # 设置编译标志
+    export CFLAGS="-O3 -flto"
+    export CXXFLAGS="-O3 -flto -std=c++20"
+
     mkdir -p bin
+
+    # 确保 NDK 工具有执行权限
+    if [ $IS_WINDOWS -eq 0 ]; then
+        chmod +x "$prebuilt_path"/*
+    fi
 
     # 使用并行编译
     local pids=()
@@ -394,11 +407,18 @@ compile_binaries() {
                 local output="bin/$source-$target"
                 local cpp_file="src/$source.cpp"
 
-                $prebuilt_path/${target}-linux-android21-clang++ \
-                    -O2 -Wall -Wextra -std=c++11 -static-libstdc++ \
+                # 修复 Linux 下的路径和权限问题
+                if [ ! -f "$cpp_file" ]; then
+                    log_error "Source file not found: $cpp_file"
+                    exit 1
+                fi
+
+                "$prebuilt_path/${target}-linux-android21-clang++" \
+                    $CXXFLAGS -Wall -Wextra -static-libstdc++ \
+                    -I src -I src/ \
                     -o "$output" "$cpp_file" || exit 1
 
-                $prebuilt_path/llvm-strip "$output" || log_warn "Failed to strip $output"
+                "$prebuilt_path/llvm-strip" "$output" || log_warn "Failed to strip $output"
             ) &
             pids+=($!)
 
