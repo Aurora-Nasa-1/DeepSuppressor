@@ -71,17 +71,11 @@ jobs:
           echo '. /data/adb/magisk/util_functions.sh' >> META-INF/com/google/android/update-binary
           echo '[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk' >> META-INF/com/google/android/update-binary
           echo 'ui_print "******************************"' >> META-INF/com/google/android/update-binary
-          echo 'ui_print " Installing AMMF-based module "' >> META-INF/com/google/android/update-binary
+          echo 'ui_print " Installing module "' >> META-INF/com/google/android/update-binary
           echo 'ui_print "******************************"' >> META-INF/com/google/android/update-binary
           echo 'extract "$ZIPFILE" "module.prop" "$MODPATH"' >> META-INF/com/google/android/update-binary
           echo 'extract "$ZIPFILE" "system.prop" "$MODPATH"' >> META-INF/com/google/android/update-binary
-          echo 'mkdir -p "$MODPATH/bin"' >> META-INF/com/google/android/update-binary
-          echo 'extract "$ZIPFILE" "bin/*" "$MODPATH/bin"' >> META-INF/com/google/android/update-binary
           echo 'set_perm_recursive "$MODPATH" 0 0 0755 0644' >> META-INF/com/google/android/update-binary
-          echo 'set_perm_recursive "$MODPATH/bin" 0 2000 0755 0755' >> META-INF/com/google/android/update-binary
-          echo 'mkdir -p "/data/adb/modules/${action_id}/logs"' >> META-INF/com/google/android/update-binary
-          echo 'mkdir -p "/data/adb/modules/${action_id}/module_settings"' >> META-INF/com/google/android/update-binary
-          echo 'set_perm_recursive "/data/adb/modules/${action_id}/logs" 0 0 0755 0644' >> META-INF/com/google/android/update-binary
           echo 'ui_print "Installation complete!"' >> META-INF/com/google/android/update-binary
           echo 'ui_print "Please reboot your device"' >> META-INF/com/google/android/update-binary
           echo 'install_module' >> META-INF/com/google/android/update-binary

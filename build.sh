@@ -384,17 +384,13 @@ mount /data 2>/dev/null
 . /data/adb/magisk/util_functions.sh
 [ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
 ui_print "******************************"
-ui_print " Installing ${action_name} module "
+ui_print " Installing module "
 ui_print "******************************"
 extract "$ZIPFILE" "module.prop" "$MODPATH"
 extract "$ZIPFILE" "system.prop" "$MODPATH"
 mkdir -p "$MODPATH/bin"
 extract "$ZIPFILE" "bin/*" "$MODPATH/bin"
 set_perm_recursive "$MODPATH" 0 0 0755 0644
-set_perm_recursive "$MODPATH/bin" 0 2000 0755 0755
-mkdir -p "/data/adb/modules/${action_id}/logs"
-mkdir -p "/data/adb/modules/${action_id}/module_settings"
-set_perm_recursive "/data/adb/modules/${action_id}/logs" 0 0 0755 0644
 ui_print "Installation complete!"
 ui_print "Please reboot your device"
 install_module
