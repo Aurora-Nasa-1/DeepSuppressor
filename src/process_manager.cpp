@@ -645,16 +645,22 @@ public:
 
         for (int i = start_index; i < argc; ++i) {
             std::string arg = argv[i];
-            if (arg.find(':') != std::string::npos) {
-                if (!current_package.empty()) current_processes.push_back(arg);
-            } else {
-                if (!current_package.empty() && !current_processes.empty()) {
+            if (arg.find(':') == std::string::npos) {
+                // 如果是package_name，先保存前一个package的信息
+                if (!current_package.empty()) {
                     result.emplace_back(current_package, current_processes);
                     current_processes.clear();
                 }
                 current_package = arg;
+            } else {
+                // 如果是process_name，添加到当前package的process列表
+                if (!current_package.empty()) {
+                    current_processes.push_back(arg);
+                }
             }
         }
+        
+        // 添加最后一个package的信息
         if (!current_package.empty() && !current_processes.empty()) {
             result.emplace_back(current_package, current_processes);
         }
@@ -668,7 +674,7 @@ int main(int argc, char* argv[]) {
         Logger::log(Logger::Level::INFO, "Process manager starting...");
 
         if (argc < 3) {
- elegido Logger::log(Logger::Level::ERROR, std::format("Usage: {} [-d] <package_name> <process_name_1> [<process_name_2> ...]", argv[0]));
+            Logger::log(Logger::Level::ERROR, std::format("Usage: {} [-d] <package_name_1> <process_name_1> [<package_name_2> <process_name_1> ...]", argv[0]));
             return 1;
         }
 
