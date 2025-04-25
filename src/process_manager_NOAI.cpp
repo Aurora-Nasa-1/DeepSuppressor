@@ -182,22 +182,49 @@ private:
     }
 
     bool isScreenOn() noexcept {
-        std::string cmd = "dumpsys power | grep 'Display Power: state=' | grep -o 'state=.*' | cut -d'=' -f2";
-        std::string result = executeCommand(cmd);
-        return result.find("ON") != std::string::npos;
+        std::string output = executeCommand("dumpsys power");
+        
+        // 查找包含 "Display Power: state=" 的行
+        const std::string target = "Display Power: state=";
+        size_t pos = output.find(target);
+        if (pos == std::string::npos) {
+            return false;
+        }
+        
+        // 获取状态值
+        pos += target.length();
+        size_t end = output.find('\n', pos);
+        if (end == std::string::npos) {
+            end = output.length();
+        }
+        
+        // 提取并比较状态值
+        std::string state = output.substr(pos, end - pos);
+        return state.find("ON") != std::string::npos;
     }
 
     bool isProcessForeground(const std::string& package_name) noexcept {
-        std::string cmd = "dumpsys activity top | grep ACTIVITY";
-        std::string result = executeCommand(cmd);
+        std::string output = executeCommand("dumpsys window");
+        size_t start = 0;
+        size_t end = output.find('\n');
 
-        size_t start = result.find("(top: ");
-        if (start != std::string::npos) {
-            start += 6;
-            size_t end = result.find(")", start);
-            if (end != std::string::npos) {
-                return package_name == result.substr(start, end - start);
+        while (end != std::string::npos) {
+            std::string line = output.substr(start, end - start);
+            size_t pos = line.find("mCurrentFocus");
+
+            if (pos != std::string::npos) {
+                size_t lastSpace = line.rfind(' ');
+                if (lastSpace != std::string::npos) {
+                    std::string lastField = line.substr(lastSpace + 1);
+                    size_t slashPos = lastField.find('/');
+                    if (slashPos != std::string::npos) {
+                        std::string currentPackage = lastField.substr(0, slashPos);
+                        return package_name == currentPackage;
+                    }
+                }
             }
+            start = end + 1;
+            end = output.find('\n', start);
         }
         return false;
     }
