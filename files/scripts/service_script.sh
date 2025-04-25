@@ -47,3 +47,15 @@ else
     log_info "Error: Process manager not found or not executable"
     exit 1
 fi
+
+# 启动文件监控
+if [ -f "$MODPATH/bin/filewatch" ]; then
+    "$MODPATH/bin/filewatch" -d -i 720 "$CONFIG_FILE" "$MODPATH/files/scripts/reload_config.sh" &
+    log_info "File monitor started for config file"
+else
+    log_info "Error: filewatch not found or not executable"
+    exit 1
+fi
+
+# 记录正常退出信息
+log_info "Service initialization completed"
