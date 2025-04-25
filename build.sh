@@ -365,37 +365,6 @@ package_module() {
     # 添加创建META-INF目录的逻辑
     log_info "Creating META-INF directory structure..."
     mkdir -p META-INF/com/google/android
-    
-    # 创建update-binary文件
-    cat > META-INF/com/google/android/update-binary << 'EOF'
-#!/sbin/sh
-umask 022
-ui_print() { echo "$1"; }
-require_new_magisk() {
-  ui_print "********************************"
-  ui_print " Please install Magisk v20.4+! "
-  ui_print "********************************"
-  exit 1
-}
-OUTFD=$2
-ZIPFILE=$3
-mount /data 2>/dev/null
-[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk
-. /data/adb/magisk/util_functions.sh
-[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk
-ui_print "******************************"
-ui_print " Installing module "
-ui_print "******************************"
-extract "$ZIPFILE" "module.prop" "$MODPATH"
-extract "$ZIPFILE" "system.prop" "$MODPATH"
-mkdir -p "$MODPATH/bin"
-extract "$ZIPFILE" "bin/*" "$MODPATH/bin"
-set_perm_recursive "$MODPATH" 0 0 0755 0644
-ui_print "Installation complete!"
-ui_print "Please reboot your device"
-install_module
-exit 0
-EOF
 
     # 创建updater-script文件
     echo '#MAGISK' > META-INF/com/google/android/updater-script

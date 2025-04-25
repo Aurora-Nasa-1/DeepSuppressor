@@ -102,32 +102,6 @@ jobs:
       - name: Create META-INF directory structure
         run: |
           mkdir -p META-INF/com/google/android
-          echo '#!/sbin/sh' > META-INF/com/google/android/update-binary
-          echo 'umask 022' >> META-INF/com/google/android/update-binary
-          echo 'ui_print() { echo "$1"; }' >> META-INF/com/google/android/update-binary
-          echo 'require_new_magisk() {' >> META-INF/com/google/android/update-binary
-          echo '  ui_print "********************************"' >> META-INF/com/google/android/update-binary
-          echo '  ui_print " Please install Magisk v20.4+! "' >> META-INF/com/google/android/update-binary
-          echo '  ui_print "********************************"' >> META-INF/com/google/android/update-binary
-          echo '  exit 1' >> META-INF/com/google/android/update-binary
-          echo '}' >> META-INF/com/google/android/update-binary
-          echo 'OUTFD=$2' >> META-INF/com/google/android/update-binary
-          echo 'ZIPFILE=$3' >> META-INF/com/google/android/update-binary
-          echo 'mount /data 2>/dev/null' >> META-INF/com/google/android/update-binary
-          echo '[ -f /data/adb/magisk/util_functions.sh ] || require_new_magisk' >> META-INF/com/google/android/update-binary
-          echo '. /data/adb/magisk/util_functions.sh' >> META-INF/com/google/android/update-binary
-          echo '[ $MAGISK_VER_CODE -lt 20400 ] && require_new_magisk' >> META-INF/com/google/android/update-binary
-          echo 'ui_print "******************************"' >> META-INF/com/google/android/update-binary
-          echo 'ui_print " Installing module "' >> META-INF/com/google/android/update-binary
-          echo 'ui_print "******************************"' >> META-INF/com/google/android/update-binary
-          echo 'extract "$ZIPFILE" "module.prop" "$MODPATH"' >> META-INF/com/google/android/update-binary
-          echo 'extract "$ZIPFILE" "system.prop" "$MODPATH"' >> META-INF/com/google/android/update-binary
-          echo 'set_perm_recursive "$MODPATH" 0 0 0755 0644' >> META-INF/com/google/android/update-binary
-          echo 'ui_print "Installation complete!"' >> META-INF/com/google/android/update-binary
-          echo 'ui_print "Please reboot your device"' >> META-INF/com/google/android/update-binary
-          echo 'install_module' >> META-INF/com/google/android/update-binary
-          echo 'exit 0' >> META-INF/com/google/android/update-binary
-          chmod 755 META-INF/com/google/android/update-binary
           echo '#MAGISK' > META-INF/com/google/android/updater-script
 
       - name: Upload zip files as artifacts
