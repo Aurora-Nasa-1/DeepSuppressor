@@ -22,16 +22,13 @@
     align-items: center;
     height: 64px;
     padding-inline: 16px;
-    background-color: var(--surface-container);
+    background-color: transparent;
     color: var(--on-surface);
-    transition: all var(--tra);
+    transition: background-color 0.2s ease;
     border-radius: 0 0 24px 24px;
     border: none;
 }
-.app-header {
-    transition: background-color 0.3s ease;
-    background-color: transparent;
-}
+
 .app-header.header-solid {
     --color: var(--on-surface);
     position: sticky;
@@ -679,16 +676,6 @@ html, body, #main-content, .language-options, .app-nav {
         overflow-x: hidden;
     }
 
-    /* 导航项容器样式 */
-    .nav-content ul {
-        display: flex;
-        flex-direction: column;
-        padding: 0;
-        margin: 0;
-        gap: 4px;
-        height: 240px; /* 固定高度：4个导航项(56px) + 3个间距(4px) */
-        flex-shrink: 0;
-    }
 
     /* 导航项样式调整 */
     .nav-item {

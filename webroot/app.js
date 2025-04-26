@@ -64,6 +64,172 @@ class App {
     async execCommand(command) {
         return await Core.execCommand(command);
     }
+    
+    /**
+     * 渲染界面内容API
+     * 支持模板字符串和数据绑定，动态渲染内容到指定容器
+     * @param {string|HTMLElement} container - 容器选择器或DOM元素
+     * @param {string} template - 模板字符串
+     * @param {Object} data - 绑定数据
+     * @param {Object} options - 渲染选项
+     * @returns {HTMLElement} 渲染后的容器元素
+     */
+    renderUI(container, template, data = {}, options = {}) {
+        // 获取容器元素
+        const containerElement = typeof container === 'string' 
+            ? document.querySelector(container) 
+            : container;
+            
+        if (!containerElement) {
+            console.error('渲染UI失败: 容器不存在', container);
+            return null;
+        }
+        
+        // 默认选项
+        const defaultOptions = {
+            append: false,        // 是否追加内容
+            animate: true,        // 是否使用动画
+            processEvents: true,  // 是否处理事件绑定
+            clearFirst: !options.append // 如果不是追加模式，默认先清空容器
+        };
+        
+        const renderOptions = { ...defaultOptions, ...options };
+        
+        // 处理模板中的数据绑定 (简单的模板引擎)
+        let processedTemplate = template;
+        if (data && typeof template === 'string') {
+            // 替换 ${key} 形式的变量
+            processedTemplate = template.replace(/\${([^}]+)}/g, (match, key) => {
+                // 支持简单的表达式计算
+                try {
+                    // 创建一个带有数据对象属性的上下文
+                    const context = Object.assign({}, data, {
+                        I18n: window.I18n || { translate: (key, fallback) => fallback }
+                    });
+                    
+                    // 使用Function构造函数创建一个可以访问上下文的函数
+                    const keys = Object.keys(context);
+                    const values = Object.values(context);
+                    const func = new Function(...keys, `return ${key};`);
+                    
+                    // 执行函数获取结果
+                    return func(...values) ?? '';
+                } catch (error) {
+                    console.warn(`模板表达式解析错误: ${key}`, error);
+                    return '';
+                }
+            });
+        }
+        
+        // 清空容器或准备追加
+        if (renderOptions.clearFirst) {
+            containerElement.innerHTML = '';
+        }
+        
+        // 创建临时容器解析HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = processedTemplate;
+        
+        // 应用动画类
+        if (renderOptions.animate) {
+            // 为每个顶级子元素添加淡入动画类
+            Array.from(temp.children).forEach(child => {
+                child.classList.add('fade-in');
+                // 使用随机延迟创建错落有致的动画效果
+                child.style.animationDelay = `${Math.random() * 0.2}s`;
+            });
+        }
+        
+        // 添加到容器
+        if (renderOptions.append) {
+            // 逐个添加子节点以保留事件绑定
+            while (temp.firstChild) {
+                containerElement.appendChild(temp.firstChild);
+            }
+        } else {
+            containerElement.innerHTML = temp.innerHTML;
+        }
+        
+        // 处理事件绑定
+        if (renderOptions.processEvents) {
+            this.processEventBindings(containerElement, data);
+        }
+        
+        return containerElement;
+    }
+    
+    /**
+     * 处理元素中的事件绑定属性
+     * 支持 data-on-click="methodName" 形式的声明式事件绑定
+     * @param {HTMLElement} element - 要处理的元素
+     * @param {Object} context - 事件处理上下文
+     */
+    processEventBindings(element, context = {}) {
+        // 查找所有带有data-on-*属性的元素
+        const eventElements = element.querySelectorAll('[data-on-click], [data-on-change], [data-on-input], [data-on-submit]');
+        
+        eventElements.forEach(el => {
+            // 处理点击事件
+            if (el.hasAttribute('data-on-click')) {
+                const methodName = el.getAttribute('data-on-click');
+                el.addEventListener('click', (event) => {
+                    // 查找方法 - 先在上下文中查找，再在当前页面模块中查找
+                    const method = context[methodName] || 
+                                  (window[Router.modules[app.state.currentPage]] && 
+                                   window[Router.modules[app.state.currentPage]][methodName]);
+                    
+                    if (typeof method === 'function') {
+                        method.call(context, event, el);
+                    } else {
+                        console.warn(`点击事件处理方法未找到: ${methodName}`);
+                    }
+                });
+            }
+            
+            // 处理变更事件
+            if (el.hasAttribute('data-on-change')) {
+                const methodName = el.getAttribute('data-on-change');
+                el.addEventListener('change', (event) => {
+                    const method = context[methodName] || 
+                                  (window[Router.modules[app.state.currentPage]] && 
+                                   window[Router.modules[app.state.currentPage]][methodName]);
+                    
+                    if (typeof method === 'function') {
+                        method.call(context, event, el);
+                    }
+                });
+            }
+            
+            // 处理输入事件
+            if (el.hasAttribute('data-on-input')) {
+                const methodName = el.getAttribute('data-on-input');
+                el.addEventListener('input', (event) => {
+                    const method = context[methodName] || 
+                                  (window[Router.modules[app.state.currentPage]] && 
+                                   window[Router.modules[app.state.currentPage]][methodName]);
+                    
+                    if (typeof method === 'function') {
+                        method.call(context, event, el);
+                    }
+                });
+            }
+            
+            // 处理表单提交事件
+            if (el.hasAttribute('data-on-submit')) {
+                const methodName = el.getAttribute('data-on-submit');
+                el.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    const method = context[methodName] || 
+                                  (window[Router.modules[app.state.currentPage]] && 
+                                   window[Router.modules[app.state.currentPage]][methodName]);
+                    
+                    if (typeof method === 'function') {
+                        method.call(context, event, el);
+                    }
+                });
+            }
+        });
+    }
 }
 
 // 路由管理器

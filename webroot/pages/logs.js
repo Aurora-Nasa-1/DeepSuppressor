@@ -190,10 +190,6 @@ const LogsPage = {
             
             // 显示对话框
             dialog.showModal();
-            dialog.style.opacity = '0';
-            requestAnimationFrame(() => {
-                dialog.style.opacity = '1';
-            });
             
             // 处理对话框按钮点击
             return new Promise((resolve, reject) => {
@@ -206,7 +202,7 @@ const LogsPage = {
                         setTimeout(() => {
                             dialog.close();
                             document.body.removeChild(dialog);
-                        }, 200); // 与动画时长匹配
+                        }, 120); // 与 fadeOut 动画时长匹配
 
                         if (action === 'confirm') {
                             try {
@@ -292,111 +288,139 @@ const LogsPage = {
             .replace(/'/g, "&#039;");
     },
     
+    // 虚拟滚动相关配置
+    virtualScroll: {
+        itemHeight: 24, // 每行日志的高度
+        bufferSize: 50, // 上下缓冲区行数
+        visibleItems: [], // 当前可见的日志行
+        totalItems: [], // 所有日志行
+        scrollTop: 0
+    },
+    
     // 格式化日志内容
     formatLogContent() {
         if (!this.logContent || this.logContent.trim() === '') {
             return `<div class="empty-state">${I18n.translate('NO_LOGS', '没有可用的日志')}</div>`;
         }
+        
+        // 将日志内容分割成行
+        this.virtualScroll.totalItems = this.logContent.split('\n').map((line, index) => {
+            return {
+                id: index,
+                content: this.formatLogLine(line)
+            };
+        });
+        
+        // 初始化虚拟滚动
+        return this.renderVirtualScroll();
+    },
     
-        // 将日志分割成行
-        const lines = this.logContent.split('\n');
-        const chunkSize = 1000; // 每次处理1000行
-        const totalChunks = Math.ceil(lines.length / chunkSize);
-        let processedContent = '';
-    
-        // 创建处理函数
-        const processChunk = (chunkIndex) => {
-            const start = chunkIndex * chunkSize;
-            const end = Math.min(start + chunkSize, lines.length);
+    // 格式化单行日志
+    formatLogLine(line) {
+        if (!line.trim()) return '';
+        
+        let formatted = this.escapeHtml(line);
+        
+        // 解析时间戳（假设日志格式包含ISO时间戳）
+        const timeMatch = formatted.match(/\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/);
+        if (timeMatch) {
+            const timestamp = new Date(timeMatch[0]);
+            const relativeTime = this.getRelativeTimeString(timestamp);
+            formatted = formatted.replace(timeMatch[0], relativeTime);
+        }
+        
+        // 为不同级别的日志添加颜色标识
+        formatted = formatted.replace(/\[(ERROR|WARN|INFO|DEBUG)\]/g, (match, level) => {
+            const levelClass = level.toLowerCase();
+            let icon = '';
             
-            for (let i = start; i < end; i++) {
-                const line = lines[i];
-                if (line.includes('[ERROR]') || line.includes('[WARN]') || 
-                    line.includes('[INFO]') || line.includes('[DEBUG]')) {
-                    processedContent += this.formatLogLine(line) + '\n';
-                } else {
-                    processedContent += this.escapeHtml(line) + '\n';
-                }
+            switch (levelClass) {
+                case 'error':
+                    icon = '<span class="material-symbols-rounded">error</span>';
+                    break;
+                case 'warn':
+                    icon = '<span class="material-symbols-rounded">warning</span>';
+                    break;
+                case 'info':
+                    icon = '<span class="material-symbols-rounded">info</span>';
+                    break;
+                case 'debug':
+                    icon = '<span class="material-symbols-rounded">code</span>';
+                    break;
             }
+            
+            return `<span class="log-level ${levelClass}">${icon}${level}</span>`;
+        });
+            
+        return formatted;
+    },
     
-            // 更新显示
+    // 获取相对时间字符串
+    getRelativeTimeString(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        
+        // 今天的日期
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // 昨天的日期
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        if (diffMins < 1) return '刚刚';
+        if (diffMins < 60) return `${diffMins}分钟前`;
+        if (diffHours < 24 && date >= today) return `今天 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+        if (date >= yesterday && date < today) return `昨天 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+        
+        // 一年内的日期显示月日
+        if (date.getFullYear() === now.getFullYear()) {
+            return `${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+        }
+        
+        // 超过一年显示完整日期
+        return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`;
+    },
+    
+    // 渲染虚拟滚动
+    renderVirtualScroll() {
+        const totalHeight = this.virtualScroll.totalItems.length * this.virtualScroll.itemHeight;
+        const containerHeight = document.getElementById('logs-display-container')?.clientHeight || 500;
+        const visibleCount = Math.ceil(containerHeight / this.virtualScroll.itemHeight);
+        
+        // 计算可见区域的起始索引
+        const startIndex = Math.max(0, Math.floor(this.virtualScroll.scrollTop / this.virtualScroll.itemHeight) - this.virtualScroll.bufferSize);
+        const endIndex = Math.min(
+            this.virtualScroll.totalItems.length,
+            startIndex + visibleCount + 2 * this.virtualScroll.bufferSize
+        );
+        
+        // 获取可见项
+        this.virtualScroll.visibleItems = this.virtualScroll.totalItems.slice(startIndex, endIndex);
+        
+        // 生成HTML
+        return `
+            <div class="virtual-scroll-container" style="height: ${totalHeight}px; position: relative;">
+                <div class="virtual-scroll-content" style="position: absolute; top: ${startIndex * this.virtualScroll.itemHeight}px;">
+                    ${this.virtualScroll.visibleItems.map(item => `<div class="log-line" data-id="${item.id}">${item.content}</div>`).join('')}
+                </div>
+            </div>
+        `;
+    },
+    
+    // 处理滚动事件
+    handleScroll(event) {
+        const container = event.target;
+        this.virtualScroll.scrollTop = container.scrollTop;
+        
+        // 使用requestAnimationFrame优化滚动性能
+        requestAnimationFrame(() => {
             const logsDisplay = document.getElementById('logs-display');
             if (logsDisplay) {
-                logsDisplay.innerHTML = processedContent;
-                // 保持滚动位置在底部
-                logsDisplay.scrollTop = logsDisplay.scrollHeight;
+                logsDisplay.innerHTML = this.renderVirtualScroll();
             }
-    
-            // 处理下一块
-            if (chunkIndex + 1 < totalChunks) {
-                requestIdleCallback(() => processChunk(chunkIndex + 1));
-            }
-        };
-    
-        // 开始处理第一块
-        requestIdleCallback(() => processChunk(0));
-    
-        return '处理中...'; // 初始显示
+        });
     },
-    
-    // 添加渲染可见行的方法
-    renderVisibleLines(container, scrollTop) {
-        if (!this._logLines) return;
-    
-        const lineHeight = 20; // 每行高度
-        const containerHeight = container.clientHeight;
-    
-        // 计算可见范围
-        const startIndex = Math.floor(scrollTop / lineHeight);
-        const visibleLines = Math.ceil(containerHeight / lineHeight);
-        const endIndex = Math.min(startIndex + visibleLines + 10, this._logLines.length); // 多渲染10行作为缓冲
-    
-        const viewport = container.querySelector('.log-content-viewport');
-        if (!viewport) return;
-    
-        // 生成可见行的HTML
-        const visibleContent = this._logLines
-            .slice(startIndex, endIndex)
-            .map((line, index) => {
-                const absoluteIndex = startIndex + index;
-                const formattedLine = line.includes('[ERROR]') || line.includes('[WARN]') || 
-                    line.includes('[INFO]') || line.includes('[DEBUG]') 
-                    ? this.formatLogLine(line) 
-                    : this.escapeHtml(line);
-                
-                return `<div class="log-line" style="position: absolute; top: ${absoluteIndex * lineHeight}px;">${formattedLine}</div>`;
-            })
-            .join('');
-        
-        viewport.innerHTML = visibleContent;
-    },
-    
-
-    
-    // 添加单行日志格式化方法
-    // 优化日志行渲染
-    formatLogLine(line) {
-    // 缓存正则表达式和图标映射
-    if (!this._logLevelRegex) {
-        this._logLevelRegex = /\[(ERROR|WARN|INFO|DEBUG)\]/;
-        this._iconMap = {
-            'error': 'error',
-            'warn': 'warning',
-            'info': 'info',
-            'debug': 'code'
-        };
-    }
-    
-    const match = line.match(this._logLevelRegex);
-    if (!match) return this.escapeHtml(line);
-    
-    const level = match[1];
-    const levelClass = level.toLowerCase();
-    const icon = `<span class="material-symbols-rounded">${this._iconMap[levelClass]}</span>`;
-    
-    // 修改标签结构以改善对齐
-    return `<span class="log-line-content"><span class="log-level ${levelClass}">${icon}${level}</span>${this.escapeHtml(line.replace(this._logLevelRegex, ''))}</span>`;
-},
     
     // 渲染页面
     render() {
