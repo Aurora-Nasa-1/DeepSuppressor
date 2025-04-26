@@ -62,23 +62,23 @@
           "value": "en",
           "label": {
             "en": "English",
-            "zh": "英文",
+            "zh": "Chinese",
             "ru": "Английский"
           }
         },
         {
           "value": "zh",
           "label": {
-            "en": "Chinese",
+            "en": "英语",
             "zh": "中文",
-            "ru": "Китайский"
+            "ru": "俄语"
           }
         },
         {
           "value": "ru",
           "label": {
-            "en": "Russian",
-            "zh": "俄文",
+            "en": "Английский",
+            "zh": "китайский",
             "ru": "Русский"
           }
         }
