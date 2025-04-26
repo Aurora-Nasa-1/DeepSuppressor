@@ -188,6 +188,7 @@ private:
         const std::string target = "Display Power: state=";
         size_t pos = output.find(target);
         if (pos == std::string::npos) {
+            Logger::log(Logger::Level::WARN, "Failed to find display power state in dumpsys output");
             return false;
         }
         
@@ -200,7 +201,9 @@ private:
         
         // 提取并比较状态值
         std::string state = output.substr(pos, end - pos);
-        return state.find("ON") != std::string::npos;
+        bool screen_on = state.find("ON") != std::string::npos;
+        Logger::log(Logger::Level::INFO, "Screen state detected: " + state + " (is_on=" + (screen_on ? "true" : "false") + ")");
+        return screen_on;
     }
 
     bool isProcessForeground(const std::string& package_name) noexcept {
