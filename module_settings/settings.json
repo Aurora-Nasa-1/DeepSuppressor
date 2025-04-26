@@ -23,6 +23,36 @@
       "en": "Suppress the QQ app",
       "zh": "是否压制 QQ",
       "ru": "Запретить запуск QQ"
+    },
+    "ADD_APP_CONFIG": {
+      "en": "Add Application Configuration",
+      "zh": "添加应用配置",
+      "ru": "Добавить конфигурацию приложения"
+    },
+    "APP_PACKAGE_NAME": {
+      "en": "Application Package Name",
+      "zh": "应用包名",
+      "ru": "Имя пакета приложения"
+    },
+    "ADD_PROCESS": {
+      "en": "Add Process",
+      "zh": "添加进程",
+      "ru": "Добавить процесс"
+    },
+    "PACKAGE_NAME_REQUIRED": {
+      "en": "Please enter the package name",
+      "zh": "请输入应用包名",
+      "ru": "Пожалуйста, введите имя пакета"
+    },
+    "PROCESS_REQUIRED": {
+      "en": "Please add at least one process",
+      "zh": "请至少添加一个进程",
+      "ru": "Пожалуйста, добавьте хотя бы один процесс"
+    },
+    "CONFIG_ADDED": {
+      "en": "Configuration added, please save changes",
+      "zh": "配置已添加，请保存更改",
+      "ru": "Конфигурация добавлена, сохраните изменения"
     }
   },
   "options": {
