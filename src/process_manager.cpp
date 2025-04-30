@@ -516,34 +516,72 @@ private:
         return false;
     }
 
-    bool isProcessForeground(const std::string& package_name) {
-        std::string cmd = "dumpsys window";
-        std::string output = executeCommand(cmd);
+    bool isProcessForeground(const std::string& package_name) noexcept {
+        std::string output = executeCommand("dumpsys window");
+        Logger::log(Logger::Level::DEBUG, 
+            "Executing dumpsys window command");
+        
+        // Log preview of raw output for debugging
+        Logger::log(Logger::Level::DEBUG, 
+            std::format("Dumpsys output preview: {}", 
+            output.substr(0, std::min(size_t(100), output.length()))));
+
+        bool found_focus = false;
+        std::string current_pkg;
+        
         size_t start = 0;
         size_t end = output.find('\n');
 
         while (end != std::string::npos) {
             std::string line = output.substr(start, end - start);
-            size_t pos = line.find("mCurrentFocus");
-            if (pos != std::string::npos) {
+            
+            // Check both mCurrentFocus and mFocusedWindow
+            size_t current_focus_pos = line.find("mCurrentFocus");
+            size_t focused_window_pos = line.find("mFocusedWindow");
+            
+            if (current_focus_pos != std::string::npos || focused_window_pos != std::string::npos) {
+                Logger::log(Logger::Level::DEBUG, 
+                    std::format("Found focus line: {}", line));
+                
                 size_t lastSpace = line.rfind(' ');
                 if (lastSpace != std::string::npos) {
                     std::string lastField = line.substr(lastSpace + 1);
+                    Logger::log(Logger::Level::DEBUG, 
+                        std::format("Last field: {}", lastField));
+                    
                     size_t slashPos = lastField.find('/');
                     if (slashPos != std::string::npos) {
-                        std::string current_pkg = lastField.substr(0, slashPos);
+                        current_pkg = lastField.substr(0, slashPos);
+                        // Remove potential prefix characters
+                        if (current_pkg.front() == '*' || current_pkg.front() == '{') {
+                            current_pkg = current_pkg.substr(1);
+                        }
+                        found_focus = true;
                         Logger::log(Logger::Level::DEBUG, 
-                            std::format("Current foreground package: {}, target package: {}", 
-                            current_pkg, package_name));
-                        return current_pkg == package_name;
+                            std::format("Extracted package name: {}", current_pkg));
+                            
+                        // Return immediately if matching package found
+                        if (current_pkg == package_name) {
+                            Logger::log(Logger::Level::DEBUG, 
+                                std::format("Found matching package: {} == {}", 
+                                current_pkg, package_name));
+                            return true;
+                        }
                     }
                 }
             }
+            
             start = end + 1;
             end = output.find('\n', start);
         }
+
+        // Log final check result
         Logger::log(Logger::Level::DEBUG, 
-            std::format("No foreground package found, target package: {}", package_name));
+            std::format("Focus check result - Found focus: {}, Current package: {}, Target package: {}", 
+            found_focus ? "true" : "false", 
+            found_focus ? current_pkg : "none", 
+            package_name));
+            
         return false;
     }
 
