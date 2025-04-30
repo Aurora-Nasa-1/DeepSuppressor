@@ -154,3 +154,21 @@
         transform: scale(1);
     }
 }
+.settings-content {
+    position: relative;
+    min-height: 100vh;
+}
+
+.fab-button-container {
+    position: sticky;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 24px;
+    pointer-events: none;
+}
+
+.fab-button {
+    pointer-events: auto;
+}

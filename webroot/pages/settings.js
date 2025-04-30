@@ -70,9 +70,11 @@ const SettingsPage = {
                 <div id="settings-loading" class="loading-overlay">
                     <div class="loading-spinner"></div>
                 </div>
-                <button id="add-app-config" class="fab-button">
-                    <span class="material-symbols-rounded">add</span>
-                </button>
+                <div class="fab-button-container">
+                    <button id="add-app-config" class="fab-button">
+                        <span class="material-symbols-rounded">add</span>
+                    </button>
+                </div>
             </div>
         `;
     },
@@ -428,7 +430,8 @@ const SettingsPage = {
         this.excludedSettings = [
             "APP_*",      // 排除所有以APP_开头的设置项
             "SYSTEM_TEMP", // 精确排除SYSTEM_TEMP
-            "ACTION_*"    // 排除所有以ACTION_开头的设置项
+            "ACTION_*",    // 排除所有以ACTION_开头的设置项
+            "suppress_config_*"
         ];
     },
 
@@ -441,7 +444,7 @@ const SettingsPage = {
             const updatedSettings = {};
             for (const key in this.settings) {
                 // 跳过内部属性和排除项
-                if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
+                if (key.startsWith('_') || this.isExcluded(key)) continue;
 
                 const element = document.getElementById(`setting-${key}`);
                 if (!element) continue;
@@ -483,7 +486,7 @@ const SettingsPage = {
             if (this.settings._configInfo.lines) {
                 for (const line of this.settings._configInfo.lines) {
                     const match = line.match(/^([A-Za-z0-9_]+)\s*=/);
-                    if (match && this.excludedSettings.includes(match[1])) {
+                    if (match && this.isExcluded(match[1])) {
                         configContent += line + '\n';
                         excludedLines.add(line);
                     }
@@ -606,7 +609,7 @@ const SettingsPage = {
         const currentSettings = {};
         for (const key in this.settings) {
             // 跳过内部属性和排除项
-            if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
+            if (key.startsWith('_') || this.isExcluded(key)) continue;
 
             const element = document.getElementById(`setting-${key}`);
             if (!element) continue;
@@ -725,7 +728,7 @@ const SettingsPage = {
 
         for (const key in this.settings) {
             // 跳过内部属性和排除项
-            if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
+            if (key.startsWith('_') || this.isExcluded(key)) continue;
 
             const element = document.getElementById(`setting-${key}`);
             if (!element) continue;
