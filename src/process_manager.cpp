@@ -478,13 +478,13 @@ private:
     }
 
     bool isScreenOn() {
-        std::string output = executeCommand("dumpsys power");
+        std::string output = executeCommand("dumpsys display");
         
-        // 查找包含 "Display Power: state=" 的行
-        const std::string target = "Display Power: state=";
+        // 查找包含 "mScreenState=" 的行
+        const std::string target = "mScreenState=";
         size_t pos = output.find(target);
         if (pos == std::string::npos) {
-            Logger::log(Logger::Level::WARN, "Failed to find display power state in dumpsys output");
+            Logger::log(Logger::Level::WARN, "Failed to find screen state in dumpsys display output");
             return false;
         }
         
