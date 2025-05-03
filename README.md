@@ -5,6 +5,8 @@
 
 本模块基于 [Aurora-Magisk-Modules-Framework-2](https://github.com/Aurora-Nasa-1/AMMF2) 开发,你也可以把它看作是一个AMMF模块开发示例(由AI辅助开发)
 
+**[Telegram](https://t.me/AuroraNasaModule)**
+
 ## 主要功能
 - 以低耗电低占用的方式，监控并压制后台进程。
 - 方便配置，支持自定义进程列表和监控规则。
