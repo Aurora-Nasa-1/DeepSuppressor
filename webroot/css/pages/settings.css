@@ -1,0 +1,27 @@
+/**
+ * AMMF WebUI 设置页面样式
+ * 基于 Material Design 3 设计系统
+ */
+
+.settings-content {
+    position: relative;
+    padding: 16px;
+}
+
+.setting-item {
+    margin-bottom: 16px;
+}
+
+/* 滑动条输出值 */
+input[type="range"] + output {
+    margin-left: 8px;
+    font: var(--label-m);
+    color: var(--on-surface-variant);
+}
+
+/* 响应式布局调整 */
+@media (min-width: 768px) {
+    .settings-content {
+        padding: 24px;
+    }
+}

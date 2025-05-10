@@ -1,17 +1,13 @@
 #!/system/bin/sh
-action_id="DeepSuppressor"
-action_name="Deep Suppressor"
-action_author="AuroraNasa & AI"
-action_description="Background Process Suppressor"
+if [ -f build_config.sh  ]; then
+. build_config.sh
+elif [ -f module_settings/build_config.sh  ]; then
+. module_settings/build_config.sh
+elif [ -f $MODPATH/module_settings/build_config.sh  ]; then
+. $MODPATH/module_settings/build_config.sh
+fi
 
 print_languages="en"                   # Default language for printing
-
-# About Install
-magisk_min_version="25400"            # Minimum required version of Magisk
-ksu_min_version="11300"               # Minimum compatible version of KernelSU
-ksu_min_kernel_version="11300"        # Minimum compatible kernel version of KernelSU
-apatch_min_version="10657"            # Minimum compatible version of APatch
-ANDROID_API="26"                      # Minimum required Android API level
 
 # Process Manager Configuration
 # 格式说明:

@@ -70,11 +70,6 @@ const SettingsPage = {
                 <div id="settings-loading" class="loading-overlay">
                     <div class="loading-spinner"></div>
                 </div>
-                <div class="fab-button-container">
-                    <button id="add-app-config" class="fab-button">
-                        <span class="material-symbols-rounded">add</span>
-                    </button>
-                </div>
             </div>
         `;
     },
@@ -130,21 +125,21 @@ const SettingsPage = {
             // 布尔值设置
             ENABLE_FEATURE_A: true,
             ENABLE_FEATURE_B: false,
-
+            
             // 数字设置
             SERVER_PORT: 8080,
-
+            
             // 文本设置
             API_KEY: "test_api_key_12345",
-
+            
             // 选择项设置
             LOG_LEVEL: "info",
             THEME: "auto",
-
+            
             // 数字滑条设置
             VOLUME: 75,
             BRIGHTNESS: 80,
-
+            
             // 添加测试排除项
             APP_TEST_1: "should_be_excluded",
             APP_TEST_2: "should_be_excluded",
@@ -406,7 +401,7 @@ const SettingsPage = {
             VOLUME: { zh: "音量", en: "Volume" },
             BRIGHTNESS: { zh: "亮度", en: "Brightness" }
         };
-
+    
         // 设置选项配置
         this.settingsOptions = {
             LOG_LEVEL: {
@@ -425,13 +420,12 @@ const SettingsPage = {
                 ]
             }
         };
-
+    
         // 添加测试排除规则
         this.excludedSettings = [
             "APP_*",      // 排除所有以APP_开头的设置项
             "SYSTEM_TEMP", // 精确排除SYSTEM_TEMP
-            "ACTION_*",    // 排除所有以ACTION_开头的设置项
-            "suppress_config_*"
+            "ACTION_*"    // 排除所有以ACTION_开头的设置项
         ];
     },
 
@@ -444,7 +438,7 @@ const SettingsPage = {
             const updatedSettings = {};
             for (const key in this.settings) {
                 // 跳过内部属性和排除项
-                if (key.startsWith('_') || this.isExcluded(key)) continue;
+                if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
 
                 const element = document.getElementById(`setting-${key}`);
                 if (!element) continue;
@@ -486,7 +480,7 @@ const SettingsPage = {
             if (this.settings._configInfo.lines) {
                 for (const line of this.settings._configInfo.lines) {
                     const match = line.match(/^([A-Za-z0-9_]+)\s*=/);
-                    if (match && this.isExcluded(match[1])) {
+                    if (match && this.excludedSettings.includes(match[1])) {
                         configContent += line + '\n';
                         excludedLines.add(line);
                     }
@@ -609,7 +603,7 @@ const SettingsPage = {
         const currentSettings = {};
         for (const key in this.settings) {
             // 跳过内部属性和排除项
-            if (key.startsWith('_') || this.isExcluded(key)) continue;
+            if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
 
             const element = document.getElementById(`setting-${key}`);
             if (!element) continue;
@@ -728,7 +722,7 @@ const SettingsPage = {
 
         for (const key in this.settings) {
             // 跳过内部属性和排除项
-            if (key.startsWith('_') || this.isExcluded(key)) continue;
+            if (key.startsWith('_') || this.excludedSettings.includes(key)) continue;
 
             const element = document.getElementById(`setting-${key}`);
             if (!element) continue;
@@ -779,10 +773,6 @@ const SettingsPage = {
 
     // 设置页面操作按钮
     setupPageActions() {
-        const addAppButton = document.getElementById('add-app-config');
-        if (addAppButton) {
-            addAppButton.addEventListener('click', () => this.showAddAppDialog());
-        }
         const pageActions = document.getElementById('page-actions');
         if (pageActions) {
             pageActions.innerHTML = `
@@ -903,127 +893,8 @@ const SettingsPage = {
         if (saveButton) {
             saveButton.replaceWith(saveButton.cloneNode(true));
         }
-    },
-    // 添加新的应用配置对话框
-    showAddAppDialog() {
-        const dialog = document.createElement('div');
-        dialog.className = 'md-dialog-container';
-        dialog.innerHTML = `
-        <div class="md-dialog">
-            <h2>${I18n.translate('ADD_APP_CONFIG', '添加应用配置')}</h2>
-            <div class="dialog-content">
-                <div class="input-group">
-                    <label>
-                        <span>${I18n.translate('APP_PACKAGE_NAME', '应用包名')}</span>
-                        <input type="text" id="package-name" placeholder="com.example.app">
-                    </label>
-                </div>
-                <div id="process-list">
-                    <div class="process-item">
-                        <input type="text" class="process-name" placeholder="com.example.app:process1">
-                        <button class="icon-button remove-process">
-                            <span class="material-symbols-rounded">remove</span>
-                        </button>
-                    </div>
-                </div>
-                <button id="add-process" class="text-button">
-                    <span class="material-symbols-rounded">add</span>
-                    ${I18n.translate('ADD_PROCESS', '添加进程')}
-                </button>
-            </div>
-            <div class="dialog-buttons">
-                <button id="cancel-config" class="text-button">
-                    ${I18n.translate('CANCEL', '取消')}
-                </button>
-                <button id="save-config" class="text-button primary">
-                    ${I18n.translate('SAVE', '保存')}
-                </button>
-            </div>
-        </div>
-    `;
-
-        document.body.appendChild(dialog);
-
-        // 绑定事件
-        this.bindAddAppDialogEvents(dialog);
-    },
-
-    // 绑定添加应用配置对话框事件
-    bindAddAppDialogEvents(dialog) {
-        const addProcess = dialog.querySelector('#add-process');
-        const processList = dialog.querySelector('#process-list');
-        const cancelBtn = dialog.querySelector('#cancel-config');
-        const saveBtn = dialog.querySelector('#save-config');
-
-        // 添加进程
-        addProcess.addEventListener('click', () => {
-            const processItem = document.createElement('div');
-            processItem.className = 'process-item';
-            processItem.innerHTML = `
-            <input type="text" class="process-name" placeholder="com.example.app:process1">
-            <button class="icon-button remove-process">
-                <span class="material-symbols-rounded">remove</span>
-            </button>
-        `;
-            processList.appendChild(processItem);
-
-            // 绑定删除按钮事件
-            processItem.querySelector('.remove-process').addEventListener('click', () => {
-                processItem.remove();
-            });
-        });
-
-        // 取消按钮
-        cancelBtn.addEventListener('click', () => {
-            dialog.remove();
-        });
-
-        // 保存按钮
-        saveBtn.addEventListener('click', async () => {
-            const packageName = dialog.querySelector('#package-name').value.trim();
-            const processes = Array.from(dialog.querySelectorAll('.process-name'))
-                .map(input => input.value.trim())
-                .filter(value => value);
-
-            if (!packageName) {
-                Core.showToast(I18n.translate('PACKAGE_NAME_REQUIRED', '请输入应用包名'));
-                return;
-            }
-
-            if (processes.length === 0) {
-                Core.showToast(I18n.translate('PROCESS_REQUIRED', '请至少添加一个进程'));
-                return;
-            }
-
-            // 转换包名格式（将点号替换为下划线）
-            const formattedPackage = packageName.replace(/\./g, '_');
-
-            // 构建新的配置
-            const newConfig = {
-                [`suppress_APP_${formattedPackage}`]: true
-            };
-
-            processes.forEach((process, index) => {
-                newConfig[`suppress_config_${formattedPackage}_${index + 1}`] = `"${process}"`;
-            });
-
-            // 更新设置
-            Object.assign(this.settings, newConfig);
-
-            // 更新显示
-            this.updateSettingsDisplay();
-
-            // 标记有未保存的更改
-            this.hasUnsavedChanges = true;
-
-            // 关闭对话框
-            dialog.remove();
-
-            // 显示提示
-            Core.showToast(I18n.translate('CONFIG_ADDED', '配置已添加，请保存更改'));
-        });
     }
-}
+};
 
 // 导出设置页面模块
 window.SettingsPage = SettingsPage;
