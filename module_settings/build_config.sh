@@ -1,10 +1,10 @@
 #!/system/bin/sh
-action_id="Module_ID"
-action_name="Module Name"
-action_author="Module Author"
-action_description="Module Description"
+action_id="DeepSuppressor"
+action_name="DeepSuppressor"
+action_author="AuroraNasa"
+action_description="DeepSuppressor"
 
-Github_update_repo="your_name/your_repo"
+Github_update_repo="Aurora-Nasa-1/DeepSuppressor"
 updateJson="httpURL"
 
 magisk_min_version="25400"             # Minimum required version of Magisk
