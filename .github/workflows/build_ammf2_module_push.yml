@@ -63,8 +63,8 @@ jobs:
       - name: Get current time
         run: |
           cd ./ammf2
-          random_number=$((RANDOM % 100))
-          echo "$random_number" > current_time.txt
+          time=$(date +%Y%m%d)
+          echo "$time" > current_time.txt
 
       - name: Get latest tag
         run: |
