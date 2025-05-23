@@ -10,6 +10,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <format>
 // 头文件: 杀人啦
 class Logger {
 public:
@@ -150,11 +151,13 @@ private:
         std::string package_name;
         std::vector<std::string> process_names;
         bool is_foreground;
+        std::chrono::steady_clock::time_point last_background_time;
 
         Target(std::string pkg, std::vector<std::string> procs)
             : package_name(std::move(pkg))
             , process_names(std::move(procs))
-            , is_foreground(true) {}
+            , is_foreground(true)
+            , last_background_time(std::chrono::steady_clock::now()) {}
     };
 
     std::atomic<bool> running{true};
@@ -206,14 +209,14 @@ private:
         return screen_on;
     }
 
-    bool isProcessForeground(const std::string& package_name) {
-        std::string cmd = "dumpsys window";
-        std::string output = executeCommand(cmd);
-        Logger::log(Logger::Level::DEBUG, "Executing dumpsys window command");
-        
-        // 记录原始输出的前100个字符用于调试
+    bool isProcessForeground(const std::string& package_name) noexcept {
+        std::string output = executeCommand("dumpsys window");
         Logger::log(Logger::Level::DEBUG, 
-            std::format("dumpsys output preview: {}", 
+            "Executing dumpsys window command");
+        
+        // Log preview of raw output for debugging
+        Logger::log(Logger::Level::DEBUG, 
+            std::format("Dumpsys output preview: {}", 
             output.substr(0, std::min(size_t(100), output.length()))));
 
         bool found_focus = false;
@@ -225,38 +228,48 @@ private:
         while (end != std::string::npos) {
             std::string line = output.substr(start, end - start);
             
-            // 检查 mCurrentFocus
+            // Check both mCurrentFocus and mFocusedWindow
             size_t current_focus_pos = line.find("mCurrentFocus");
-            // 检查 mFocusedWindow
             size_t focused_window_pos = line.find("mFocusedWindow");
             
             if (current_focus_pos != std::string::npos || focused_window_pos != std::string::npos) {
                 Logger::log(Logger::Level::DEBUG, 
                     std::format("Found focus line: {}", line));
                 
-                size_t lastSpace = line.rfind(' ');
-                if (lastSpace != std::string::npos) {
-                    std::string lastField = line.substr(lastSpace + 1);
-                    Logger::log(Logger::Level::DEBUG, 
-                        std::format("Last field: {}", lastField));
+                // Look for the pattern "Window{...}" and extract package name from it
+                size_t window_pos = line.find("Window{");
+                if (window_pos != std::string::npos) {
+                    // Find the content inside Window{...}
+                    size_t content_start = window_pos + 7; // Skip "Window{"
+                    size_t content_end = line.find('}', content_start);
                     
-                    size_t slashPos = lastField.find('/');
-                    if (slashPos != std::string::npos) {
-                        current_pkg = lastField.substr(0, slashPos);
-                        // 移除可能存在的前缀字符
-                        if (current_pkg.front() == '*' || current_pkg.front() == '{') {
-                            current_pkg = current_pkg.substr(1);
-                        }
-                        found_focus = true;
+                    if (content_end != std::string::npos) {
+                        std::string window_content = line.substr(content_start, content_end - content_start);
                         Logger::log(Logger::Level::DEBUG, 
-                            std::format("Extracted package name: {}", current_pkg));
-                            
-                        // 如果找到匹配的包名，立即返回
-                        if (current_pkg == package_name) {
-                            Logger::log(Logger::Level::DEBUG, 
-                                std::format("Found matching package: {} == {}", 
-                                current_pkg, package_name));
-                            return true;
+                            std::format("Window content: {}", window_content));
+                        
+                        // Find package name pattern: look for the part that contains '/'
+                        // Format is usually: "hash u0 package.name/activity.name"
+                        size_t slash_pos = window_content.find('/');
+                        if (slash_pos != std::string::npos) {
+                            // Work backwards from slash to find the start of package name
+                            size_t pkg_start = window_content.rfind(' ', slash_pos);
+                            if (pkg_start != std::string::npos) {
+                                pkg_start++; // Skip the space
+                                current_pkg = window_content.substr(pkg_start, slash_pos - pkg_start);
+                                found_focus = true;
+                                
+                                Logger::log(Logger::Level::DEBUG, 
+                                    std::format("Extracted package name: {}", current_pkg));
+                                    
+                                // Return immediately if matching package found
+                                if (current_pkg == package_name) {
+                                    Logger::log(Logger::Level::DEBUG, 
+                                        std::format("Found matching package: {} == {}", 
+                                        current_pkg, package_name));
+                                    return true;
+                                }
+                            }
                         }
                     }
                 }
@@ -266,9 +279,9 @@ private:
             end = output.find('\n', start);
         }
 
-        // 输出最终的检查结果
+        // Log final check result
         Logger::log(Logger::Level::DEBUG, 
-            std::format("Focus check result - Found any focus: {}, Current package: {}, Target package: {}", 
+            std::format("Focus check result - Found focus: {}, Current package: {}, Target package: {}", 
             found_focus ? "true" : "false", 
             found_focus ? current_pkg : "none", 
             package_name));
@@ -283,6 +296,69 @@ private:
             system(cmd.c_str());
         }
         Logger::log(Logger::Level::INFO, "Killed process: " + process_name + " for package: " + package_name);
+    }
+
+    void handleScreenOff() {
+        for (auto& target : targets) {
+            if (!target.is_foreground) {
+                for (const auto& proc : target.process_names) {
+                    killProcess(proc, target.package_name);
+                }
+            }
+        }
+        std::this_thread::sleep_for(SCREEN_OFF_DEEP_SLEEP);
+    }
+
+    void checkProcesses() {
+        bool any_active = false;
+
+        for (auto& target : targets) {
+            try {
+                bool current_foreground = isProcessForeground(target.package_name);
+                bool should_kill = false;
+                auto now = std::chrono::steady_clock::now();
+
+                if (current_foreground != target.is_foreground) {
+                    target.is_foreground = current_foreground;
+                    if (!current_foreground) {
+                        target.last_background_time = now;
+                    }
+                    Logger::log(Logger::Level::INFO, "Package " + target.package_name +
+                        (current_foreground ? " moved to foreground" : " moved to background"));
+                }
+
+                // 添加严格的前台保护：只有在确认不在前台时才考虑杀死进程
+                if (!current_foreground && !target.is_foreground) {
+                    auto background_duration = now - target.last_background_time;
+                    auto kill_threshold = std::chrono::minutes(10); // 默认10分钟后台阈值
+                    
+                    if (background_duration >= kill_threshold) {
+                        should_kill = true;
+                        Logger::log(Logger::Level::DEBUG, 
+                            std::format("Marking {} for kill - background for {}s, threshold {}s", 
+                            target.package_name, 
+                            std::chrono::duration_cast<std::chrono::seconds>(background_duration).count(),
+                            std::chrono::duration_cast<std::chrono::seconds>(kill_threshold).count()));
+                    }
+                } else if (current_foreground) {
+                    Logger::log(Logger::Level::DEBUG, 
+                        std::format("Protecting foreground app: {}", target.package_name));
+                }
+
+                if (should_kill) {
+                    for (const auto& proc : target.process_names) {
+                        killProcess(proc, target.package_name);
+                    }
+                }
+
+                if (current_foreground) any_active = true;
+            } catch (const std::exception& e) {
+                Logger::log(Logger::Level::ERROR,
+                    std::format("Error processing target {}: {}", target.package_name, e.what()));
+            }
+        }
+
+        std::this_thread::sleep_for(any_active ? CHECK_INTERVAL : SCREEN_CHECK_INTERVAL);
     }
 
 public:
@@ -312,13 +388,8 @@ public:
                 last_screen_check = now;
 
                 if (!is_screen_on) {
-                    Logger::log(Logger::Level:: INFO, "Screen off, entering deep sleep");
-                    for (auto& target : targets) {
-                        for (const auto& proc : target.process_names) {
-                            killProcess(proc, target.package_name);
-                        }
-                    }
-                    std::this_thread::sleep_for(SCREEN_OFF_DEEP_SLEEP);
+                    Logger::log(Logger::Level::INFO, "Screen off, entering deep sleep");
+                    handleScreenOff();
                     continue;
                 }
             }
@@ -328,21 +399,7 @@ public:
                 continue;
             }
 
-            bool any_active = false;
-            for (auto& target : targets) {
-                bool current_foreground = isProcessForeground(target.package_name);
-                target.is_foreground = current_foreground;
-
-                if (current_foreground) {
-                    any_active = true;
-                } else {
-                    for (const auto& proc : target.process_names) {
-                        killProcess(proc, target.package_name);
-                    }
-                }
-            }
-
-            std::this_thread::sleep_for(any_active ? CHECK_INTERVAL : SCREEN_CHECK_INTERVAL);
+            checkProcesses();
         }
     }
 

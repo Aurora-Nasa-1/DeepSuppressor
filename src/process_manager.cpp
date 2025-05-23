@@ -390,8 +390,23 @@ private:
             habits.learning_weight = j["learning_weight"];
             habits.learning_hours = j["learning_hours"];
             habits.learning_complete = j["learning_complete"];
+            
+            // 加载 daily_patterns
+            if (j.contains("daily_patterns")) {
+                for (size_t i = 0; i < 24; ++i) {
+                    auto& pattern = habits.daily_patterns[i];
+                    pattern.hour = j["daily_patterns"][i]["hour"];
+                    pattern.activity_level = j["daily_patterns"][i]["activity_level"];
+                    pattern.check_frequency = j["daily_patterns"][i]["check_frequency"];
+                }
+            }
         } catch (const std::exception& e) {
             Logger::log(Logger::Level::WARN, std::format("Failed to load user habits: {}", e.what()));
+        }
+        
+        // 确保 last_update 总是有效
+        if (habits.last_update == std::chrono::system_clock::time_point{}) {
+            habits.last_update = std::chrono::system_clock::now();
         }
     }
 
@@ -423,6 +438,17 @@ private:
             j["learning_weight"] = habits.learning_weight;
             j["learning_hours"] = habits.learning_hours;
             j["learning_complete"] = habits.learning_complete;
+
+            // 保存 daily_patterns
+            nlohmann::json patterns_array = nlohmann::json::array();
+            for (const auto& pattern : habits.daily_patterns) {
+                nlohmann::json pattern_json;
+                pattern_json["hour"] = pattern.hour;
+                pattern_json["activity_level"] = pattern.activity_level;
+                pattern_json["check_frequency"] = pattern.check_frequency;
+                patterns_array.push_back(pattern_json);
+            }
+            j["daily_patterns"] = patterns_array;
 
             std::string json_str = j.dump(4);
             write(fd, json_str.c_str(), json_str.length());
@@ -543,29 +569,40 @@ private:
                 Logger::log(Logger::Level::DEBUG, 
                     std::format("Found focus line: {}", line));
                 
-                size_t lastSpace = line.rfind(' ');
-                if (lastSpace != std::string::npos) {
-                    std::string lastField = line.substr(lastSpace + 1);
-                    Logger::log(Logger::Level::DEBUG, 
-                        std::format("Last field: {}", lastField));
+                // Look for the pattern "Window{...}" and extract package name from it
+                size_t window_pos = line.find("Window{");
+                if (window_pos != std::string::npos) {
+                    // Find the content inside Window{...}
+                    size_t content_start = window_pos + 7; // Skip "Window{"
+                    size_t content_end = line.find('}', content_start);
                     
-                    size_t slashPos = lastField.find('/');
-                    if (slashPos != std::string::npos) {
-                        current_pkg = lastField.substr(0, slashPos);
-                        // Remove potential prefix characters
-                        if (current_pkg.front() == '*' || current_pkg.front() == '{') {
-                            current_pkg = current_pkg.substr(1);
-                        }
-                        found_focus = true;
+                    if (content_end != std::string::npos) {
+                        std::string window_content = line.substr(content_start, content_end - content_start);
                         Logger::log(Logger::Level::DEBUG, 
-                            std::format("Extracted package name: {}", current_pkg));
-                            
-                        // Return immediately if matching package found
-                        if (current_pkg == package_name) {
-                            Logger::log(Logger::Level::DEBUG, 
-                                std::format("Found matching package: {} == {}", 
-                                current_pkg, package_name));
-                            return true;
+                            std::format("Window content: {}", window_content));
+                        
+                        // Find package name pattern: look for the part that contains '/'
+                        // Format is usually: "hash u0 package.name/activity.name"
+                        size_t slash_pos = window_content.find('/');
+                        if (slash_pos != std::string::npos) {
+                            // Work backwards from slash to find the start of package name
+                            size_t pkg_start = window_content.rfind(' ', slash_pos);
+                            if (pkg_start != std::string::npos) {
+                                pkg_start++; // Skip the space
+                                current_pkg = window_content.substr(pkg_start, slash_pos - pkg_start);
+                                found_focus = true;
+                                
+                                Logger::log(Logger::Level::DEBUG, 
+                                    std::format("Extracted package name: {}", current_pkg));
+                                    
+                                // Return immediately if matching package found
+                                if (current_pkg == package_name) {
+                                    Logger::log(Logger::Level::DEBUG, 
+                                        std::format("Found matching package: {} == {}", 
+                                        current_pkg, package_name));
+                                    return true;
+                                }
+                            }
                         }
                     }
                 }
@@ -653,12 +690,21 @@ private:
                             (current_foreground ? " moved to foreground" : " moved to background"));
                     }
 
-                    if (!target.is_foreground && check_processes) {
+                    // 添加严格的前台保护：只有在确认不在前台时才考虑杀死进程
+                    if (!current_foreground && !target.is_foreground && check_processes) {
                         auto background_duration = now - target.last_background_time;
                         auto kill_interval = interval_manager.getKillInterval(target.package_name);
                         if (background_duration >= kill_interval) {
                             should_kill = true;
+                            Logger::log(Logger::Level::DEBUG, 
+                                std::format("Marking {} for kill - background for {}s, threshold {}s", 
+                                target.package_name, 
+                                std::chrono::duration_cast<std::chrono::seconds>(background_duration).count(),
+                                kill_interval.count()));
                         }
+                    } else if (current_foreground) {
+                        Logger::log(Logger::Level::DEBUG, 
+                            std::format("Protecting foreground app: {}", target.package_name));
                     }
 
                     if (should_kill) {
