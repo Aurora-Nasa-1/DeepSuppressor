@@ -5,7 +5,7 @@ action_author="AuroraNasa"
 action_description="DeepSuppressor"
 
 Github_update_repo="Aurora-Nasa-1/DeepSuppressor"
-updateJson="httpURL"
+updateJson="https://raw.githubusercontent.com/Aurora-Nasa-1/DeepSuppressor/main/update.json"
 
 magisk_min_version="25400"             # Minimum required version of Magisk
 ksu_min_version="11300"                # Minimum compatible version of KernelSU
