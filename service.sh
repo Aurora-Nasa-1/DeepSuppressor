@@ -1,5 +1,5 @@
 #!/system/bin/sh
-
+sleep 30
 # 配置文件路径和可执行文件路径
 CONFIG_FILE="$MODPATH/module_settings/config.sh"
 PROCESS_MANAGER="$MODPATH/bin/process_manager"
