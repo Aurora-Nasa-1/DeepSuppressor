@@ -1,0 +1,86 @@
+name: Build Module
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  run-ammf2-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+        with:
+          path: "./overlay"
+
+      - name: Clone AMMF2 repository
+        run: |
+          git clone --depth=1 https://github.com/Aurora-Nasa-1/AMMF2.git ammf2
+
+      - name: Copy files
+        run: |
+          cd ./overlay
+          rsync -a --ignore-existing --exclude '/ammf2' ./ ../ammf2/
+          echo "Copied unique top-level items from overlay to ammf2."  
+          find ./ -maxdepth 1 -type d -not -name '.' -not -name 'ammf2' | while read -r dir; do
+            # Remove leading ./ from the directory path
+            relative_dir=${dir#./}
+            target_dir="../ammf2/$relative_dir"
+
+            # Check if the directory also exists in ../ammf2
+            if [ -d "$target_dir" ]; then
+              echo "Processing shared directory: $relative_dir"
+              rsync -a "./$relative_dir/" "$target_dir/"
+              echo "Copied content of shared directory $relative_dir, overwriting files."
+            fi
+          done
+
+          # Keep the specific copies for customize.sh and service.sh as they have different target paths.
+          # These specific copies will overwrite the destination files if they exist.
+          cp ./customize.sh ../ammf2/files/scripts/install_custom_script.sh
+          cp ./service.sh ../ammf2/files/scripts/service_script.sh
+          echo "Copied customize.sh and service.sh to specific script paths."
+      - name: Get current time
+        run: |
+          cd ./ammf2
+          time=$(date +%Y%m%d)
+          echo "$time" > current_time.txt
+
+      - name: Get latest tag
+        run: |
+          cd ./overlay
+          git fetch --tags --force
+          LATEST_TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+          echo "$LATEST_TAG" > ../ammf2/latest_tag.txt
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          ndk-version: r26d
+          
+      - name: Download json.hpp
+        run: |
+          cd ./ammf2
+          mkdir -p src/nlohmann
+          curl -o src/nlohmann/json.hpp https://raw.githubusercontent.com/nlohmann/json/develop/single_include/nlohmann/json.hpp
+          
+      - name: Start Build
+        run: |
+          cd./ammf2
+          . module_settings/config.sh
+          LATEST_TAG=$(cat latest_tag.txt)
+          CURRENT_TIME=$(cat current_time.txt)
+          . build_for_GITHUBACTION.sh
+          rm -rf .github
+          rm -rf .git
+
+      - name: Upload zip files as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}_${{ env.SHORT_SHA }}
+          path: ammf2/*
