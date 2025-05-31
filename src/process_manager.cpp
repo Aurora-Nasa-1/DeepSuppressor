@@ -284,6 +284,82 @@ struct TimePattern {
         }
     }
 };
+struct UserHabits {
+    std::map<std::string, AppStats> app_stats;
+    int screen_on_duration_avg{ 0 };
+    int app_switch_frequency{ 0 };
+    int habit_samples{ 0 };
+    std::chrono::system_clock::time_point last_update;
+    std::chrono::system_clock::time_point last_save;
+    std::chrono::system_clock::time_point last_full_save;
+    double learning_weight{ 0.7 };
+    std::array<TimePattern, 24> daily_patterns;
+    int learning_hours{ 0 };
+    bool learning_complete{ false };
+    std::map<std::string, AppStats> modified_stats; // 用于增量保存的修改记录
+    int save_version{ 0 }; // 保存版本号，用于检测文件变化
+    bool needs_full_save{ false }; // 标记是否需要完整保存
+
+    static constexpr int LEARNING_HOURS_TARGET = 72;
+    static constexpr int SAVE_INTERVAL_MINUTES = 30; // 每30分钟保存一次
+    static constexpr int FULL_SAVE_INTERVAL_HOURS = 12; // 每12小时完整保存一次
+
+    void updateTimePattern(int hour, double activity, int freq, const std::vector<std::string>& active_apps) {
+        daily_patterns[hour].hour = hour;
+        daily_patterns[hour].update(activity, freq, active_apps);
+    }
+
+    void updateLearningProgress() {
+        if (learning_complete) return;
+        
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_update);
+        learning_hours += duration.count();
+        last_update = now;
+        
+        // 随着学习时间增加，学习权重逐渐降低
+        learning_weight = std::max(0.0, 0.7 - (static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET * 0.7));
+        
+        if (learning_hours >= LEARNING_HOURS_TARGET) {
+            learning_complete = true;
+            learning_weight = 0.0;
+            needs_full_save = true;
+        }
+    }
+    
+    bool shouldSaveNow() const {
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - last_save);
+        return duration.count() >= SAVE_INTERVAL_MINUTES;
+    }
+    
+    bool shouldFullSaveNow() const {
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_full_save);
+        return duration.count() >= FULL_SAVE_INTERVAL_HOURS || needs_full_save;
+    }
+    
+    void updateLastSaveTime() {
+        last_save = std::chrono::system_clock::now();
+    }
+    
+    void updateLastFullSaveTime() {
+        last_full_save = std::chrono::system_clock::now();
+        last_save = last_full_save;
+        needs_full_save = false;
+    }
+    
+    void markAppModified(const std::string& package_name) {
+        auto it = app_stats.find(package_name);
+        if (it != app_stats.end()) {
+            modified_stats[package_name] = it->second;
+        }
+    }
+    
+    void clearModifiedApps() {
+        modified_stats.clear();
+    }
+};
 class UserHabitManager {
 public:
     UserHabitManager() { 
@@ -770,82 +846,6 @@ private:
         }
         pclose(pipe);
         return result;
-    }
-};
-struct UserHabits {
-    std::map<std::string, AppStats> app_stats;
-    int screen_on_duration_avg{ 0 };
-    int app_switch_frequency{ 0 };
-    int habit_samples{ 0 };
-    std::chrono::system_clock::time_point last_update;
-    std::chrono::system_clock::time_point last_save;
-    std::chrono::system_clock::time_point last_full_save;
-    double learning_weight{ 0.7 };
-    std::array<TimePattern, 24> daily_patterns;
-    int learning_hours{ 0 };
-    bool learning_complete{ false };
-    std::map<std::string, AppStats> modified_stats; // 用于增量保存的修改记录
-    int save_version{ 0 }; // 保存版本号，用于检测文件变化
-    bool needs_full_save{ false }; // 标记是否需要完整保存
-
-    static constexpr int LEARNING_HOURS_TARGET = 72;
-    static constexpr int SAVE_INTERVAL_MINUTES = 30; // 每30分钟保存一次
-    static constexpr int FULL_SAVE_INTERVAL_HOURS = 12; // 每12小时完整保存一次
-
-    void updateTimePattern(int hour, double activity, int freq, const std::vector<std::string>& active_apps) {
-        daily_patterns[hour].hour = hour;
-        daily_patterns[hour].update(activity, freq, active_apps);
-    }
-
-    void updateLearningProgress() {
-        if (learning_complete) return;
-        
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_update);
-        learning_hours += duration.count();
-        last_update = now;
-        
-        // 随着学习时间增加，学习权重逐渐降低
-        learning_weight = std::max(0.0, 0.7 - (static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET * 0.7));
-        
-        if (learning_hours >= LEARNING_HOURS_TARGET) {
-            learning_complete = true;
-            learning_weight = 0.0;
-            needs_full_save = true;
-        }
-    }
-    
-    bool shouldSaveNow() const {
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - last_save);
-        return duration.count() >= SAVE_INTERVAL_MINUTES;
-    }
-    
-    bool shouldFullSaveNow() const {
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_full_save);
-        return duration.count() >= FULL_SAVE_INTERVAL_HOURS || needs_full_save;
-    }
-    
-    void updateLastSaveTime() {
-        last_save = std::chrono::system_clock::now();
-    }
-    
-    void updateLastFullSaveTime() {
-        last_full_save = std::chrono::system_clock::now();
-        last_save = last_full_save;
-        needs_full_save = false;
-    }
-    
-    void markAppModified(const std::string& package_name) {
-        auto it = app_stats.find(package_name);
-        if (it != app_stats.end()) {
-            modified_stats[package_name] = it->second;
-        }
-    }
-    
-    void clearModifiedApps() {
-        modified_stats.clear();
     }
 };
 
