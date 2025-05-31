@@ -15,7 +15,7 @@
 #include <cmath>
 #include <map>
 #include <algorithm>
-#include <random>
+#include <set>
 
 class Logger {
 public:
@@ -156,7 +156,22 @@ size_t Logger::current_log_size = 0;
 char Logger::time_buffer[32];
 std::atomic<unsigned> Logger::message_count{ 0 };
 
-// 增强的应用统计结构
+// 获取当前日期（天数）
+inline int getCurrentDay() {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto* tm_info = localtime(&time);
+    return tm_info->tm_yday; // 一年中的第几天
+}
+
+// 获取当前小时
+inline int getCurrentHour() {
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    auto* tm_info = localtime(&time);
+    return tm_info->tm_hour;
+}
+
 struct AppStats {
     int usage_count{ 0 };
     int total_foreground_time{ 0 };
@@ -164,31 +179,35 @@ struct AppStats {
     int switch_count{ 0 };
     double importance_weight{ 0.0 };
     int last_usage_hour{ -1 };
+    int last_used_day{ -1 };
+    int consecutive_days_used{ 0 };
     double usage_pattern_score{ 0.0 };
     std::array<int, 24> hourly_usage{ 0 }; // 每小时使用情况
     std::chrono::steady_clock::time_point last_foreground_time;
     std::chrono::steady_clock::time_point last_background_time;
-    int consecutive_days_used{ 0 }; // 连续使用天数
-    int last_used_day{ -1 }; // 上次使用的日期
 
-    void updateForegroundTime(int duration, int hour, int day) {
+    void updateForegroundTime(int duration, int hour) {
         total_foreground_time += duration;
         usage_count++;
-        last_usage_hour = hour;
+        
+        // 更新小时使用情况
         hourly_usage[hour]++;
         
         // 更新连续使用天数
-        if (last_used_day != day) {
-            if (last_used_day != -1 && day - last_used_day == 1) {
+        int current_day = getCurrentDay();
+        if (last_used_day != current_day) {
+            if (last_used_day != -1 && (current_day == (last_used_day + 1) || 
+                (current_day == 0 && last_used_day == 364))) { // 处理跨年
                 consecutive_days_used++;
-            } else if (last_used_day != -1 && day - last_used_day > 1) {
-                consecutive_days_used = 1;
-            } else if (last_used_day == -1) {
-                consecutive_days_used = 1;
+            } else if (last_used_day != -1) {
+                consecutive_days_used = 1; // 不连续，重置为1
+            } else {
+                consecutive_days_used = 1; // 首次使用
             }
-            last_used_day = day;
+            last_used_day = current_day;
         }
         
+        last_usage_hour = hour;
         updateUsagePatternScore();
     }
 
@@ -197,100 +216,93 @@ struct AppStats {
     }
 
     void updateUsagePatternScore() {
-        // 计算使用频率分数
-        double frequency_score = usage_count * 0.2;
+        // 更复杂的使用模式评分，考虑连续使用天数和小时分布
+        double hourly_diversity = 0.0;
+        int active_hours = 0;
         
-        // 计算使用时长分数
-        double duration_score = total_foreground_time / 3600.0 * 0.3;
-        
-        // 计算切换频率分数
-        double switch_score = switch_count * 0.1;
-        
-        // 计算连续使用分数
-        double consecutive_score = consecutive_days_used * 0.2;
-        
-        // 计算时间模式分数 - 检查是否有规律的使用时间
-        double pattern_score = 0.0;
-        int peak_hours = 0;
         for (int usage : hourly_usage) {
-            if (usage > usage_count / 24) peak_hours++;
-        }
-        pattern_score = (peak_hours <= 8) ? 0.2 : 0.1; // 集中使用时间少于8小时给予更高分数
-        
-        usage_pattern_score = frequency_score + duration_score + switch_score + consecutive_score + pattern_score;
-        usage_pattern_score = std::min(10.0, usage_pattern_score); // 限制最大值为10
-    }
-
-    void updateImportanceWeight() {
-        // 重新设计权重计算，考虑更多因素
-        double usage_weight = usage_pattern_score * 6.0; // 使用模式权重
-        double time_weight = total_foreground_time / 3600.0 * 3.0; // 使用时长权重
-        double recency_weight = (last_usage_hour >= 0) ? 1.0 : 0.0; // 最近使用权重
-        
-        importance_weight = usage_weight + time_weight + recency_weight;
-        importance_weight = std::min(100.0, importance_weight);
-    }
-    
-    // 获取应用的活跃时段
-    std::vector<int> getActiveHours() const {
-        std::vector<int> active_hours;
-        int threshold = std::max(1, usage_count / 24);
-        
-        for (int i = 0; i < 24; i++) {
-            if (hourly_usage[i] >= threshold) {
-                active_hours.push_back(i);
+            if (usage > 0) {
+                active_hours++;
+                hourly_diversity += std::log(usage + 1.0); // 使用对数避免单一时段过高权重
             }
         }
         
-        return active_hours;
+        // 归一化小时多样性
+        if (active_hours > 0) {
+            hourly_diversity /= active_hours;
+        }
+        
+        // 计算最终分数，考虑使用次数、前台时间、切换次数、连续使用天数和小时多样性
+        usage_pattern_score = 
+            (usage_count * 0.2) + 
+            (total_foreground_time / 3600.0 * 0.3) + 
+            (switch_count * 0.1) + 
+            (consecutive_days_used * 0.2) + 
+            (hourly_diversity * 0.2);
+    }
+
+    void updateImportanceWeight() {
+        // 更智能的重要性权重计算
+        double recency_factor = last_usage_hour >= 0 ? 1.0 : 0.5; // 最近使用过的应用权重更高
+        double consistency_factor = std::min(1.0, consecutive_days_used / 7.0); // 连续使用天数影响
+        
+        importance_weight = 
+            (usage_pattern_score * 0.4) + 
+            (total_foreground_time / 3600.0 * 0.3) + 
+            (recency_factor * 0.1) + 
+            (consistency_factor * 0.2);
+            
+        importance_weight = std::min(100.0, importance_weight);
     }
 };
 
-// 增强的时间模式结构
 struct TimePattern {
     int hour{ 0 };
     double activity_level{ 0.0 };
     int check_frequency{ 0 };
     std::vector<std::string> active_apps; // 该时段活跃的应用
 
-    void update(double activity, int freq, const std::string& app_name) {
-        // 使用指数移动平均更新活动水平和检查频率
+    void update(double activity, int freq, const std::vector<std::string>& apps) {
+        // 指数移动平均，更新活动水平和检查频率
         activity_level = (activity_level * 0.8) + (activity * 0.2);
-        check_frequency = static_cast<int>((check_frequency * 0.8) + (freq * 0.2));
+        check_frequency = static_cast<int>(check_frequency * 0.8 + freq * 0.2);
         
         // 更新活跃应用列表
-        if (!app_name.empty() && 
-            std::find(active_apps.begin(), active_apps.end(), app_name) == active_apps.end() && 
-            active_apps.size() < 5) { // 限制每个时段最多记录5个应用
-            active_apps.push_back(app_name);
+        std::set<std::string> current_apps(apps.begin(), apps.end());
+        std::set<std::string> existing_apps(active_apps.begin(), active_apps.end());
+        
+        // 合并应用列表，保留最活跃的应用（最多10个）
+        for (const auto& app : current_apps) {
+            if (std::find(active_apps.begin(), active_apps.end(), app) == active_apps.end()) {
+                active_apps.push_back(app);
+            }
         }
-    }
-    
-    // 检查应用是否在此时段活跃
-    bool isAppActive(const std::string& app_name) const {
-        return std::find(active_apps.begin(), active_apps.end(), app_name) != active_apps.end();
+        
+        // 如果应用过多，保留最近添加的应用
+        if (active_apps.size() > 10) {
+            active_apps.erase(active_apps.begin(), active_apps.begin() + (active_apps.size() - 10));
+        }
     }
 };
 
-// 增强的用户习惯结构
 struct UserHabits {
     std::map<std::string, AppStats> app_stats;
     int screen_on_duration_avg{ 0 };
     int app_switch_frequency{ 0 };
     int habit_samples{ 0 };
     std::chrono::system_clock::time_point last_update;
+    std::chrono::system_clock::time_point last_save;
     double learning_weight{ 0.7 };
     std::array<TimePattern, 24> daily_patterns;
     int learning_hours{ 0 };
     bool learning_complete{ false };
-    int last_active_day{ -1 }; // 上次活跃的日期
-    std::array<double, 7> day_of_week_activity{ 0.0 }; // 每周各天的活跃度
 
     static constexpr int LEARNING_HOURS_TARGET = 72;
+    static constexpr int SAVE_INTERVAL_MINUTES = 30; // 每30分钟保存一次
 
-    void updateTimePattern(int hour, double activity, int freq, const std::string& active_app = "") {
+    void updateTimePattern(int hour, double activity, int freq, const std::vector<std::string>& active_apps) {
         daily_patterns[hour].hour = hour;
-        daily_patterns[hour].update(activity, freq, active_app);
+        daily_patterns[hour].update(activity, freq, active_apps);
     }
 
     void updateLearningProgress() {
@@ -301,116 +313,114 @@ struct UserHabits {
         learning_hours += duration.count();
         last_update = now;
         
-        // 根据学习进度动态调整学习权重
-        double progress = static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET;
-        learning_weight = std::max(0.1, 0.7 - (progress * 0.7));
+        // 随着学习时间增加，学习权重逐渐降低
+        learning_weight = std::max(0.0, 0.7 - (static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET * 0.7));
         
         if (learning_hours >= LEARNING_HOURS_TARGET) {
             learning_complete = true;
-            learning_weight = 0.1; // 保留小部分学习能力以适应变化
+            learning_weight = 0.0;
         }
     }
     
-    // 更新每周活跃度
-    void updateDayActivity(int day_of_week, double activity) {
-        day_of_week_activity[day_of_week] = (day_of_week_activity[day_of_week] * 0.7) + (activity * 0.3);
+    bool shouldSaveNow() const {
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - last_save);
+        return duration.count() >= SAVE_INTERVAL_MINUTES;
     }
     
-    // 获取当前时段的活跃应用
-    std::vector<std::string> getActiveAppsForHour(int hour) const {
-        return daily_patterns[hour].active_apps;
-    }
-    
-    // 判断当前是否是用户的活跃时段
-    bool isActiveTime(int hour, int day_of_week) const {
-        return daily_patterns[hour].activity_level > 0.3 && day_of_week_activity[day_of_week] > 0.3;
+    void updateLastSaveTime() {
+        last_save = std::chrono::system_clock::now();
     }
 };
 
-// 增强的间隔管理器
 class IntervalManager {
 public:
     IntervalManager(const UserHabits& habits) : habits_(habits) {}
 
-    std::chrono::seconds getScreenCheckInterval(int current_hour, int day_of_week) const {
-        // 如果是用户活跃时段，缩短检查间隔
-        if (habits_.isActiveTime(current_hour, day_of_week)) {
-            return SCREEN_CHECK_INTERVAL_ACTIVE;
-        }
+    std::chrono::seconds getScreenCheckInterval() const {
+        // 根据当前时间段的活动水平调整屏幕检查间隔
+        int current_hour = getCurrentHour();
+        const auto& pattern = habits_.daily_patterns[current_hour];
         
         if (habits_.learning_complete) {
-            return SCREEN_CHECK_INTERVAL_MAX;
+            // 学习完成后，根据当前时段活动水平动态调整
+            double activity_factor = std::min(1.0, pattern.activity_level);
+            auto base_interval = SCREEN_CHECK_INTERVAL_MAX;
+            auto dynamic_interval = static_cast<int>(
+                base_interval.count() - 
+                (base_interval - SCREEN_CHECK_INTERVAL_MIN).count() * activity_factor
+            );
+            return std::chrono::seconds(dynamic_interval);
         }
         
+        // 学习阶段，逐渐从短间隔过渡到长间隔
         double progress = static_cast<double>(habits_.learning_hours) / UserHabits::LEARNING_HOURS_TARGET;
         int interval = static_cast<int>(
             SCREEN_CHECK_INTERVAL_MIN.count() +
-            (SCREEN_CHECK_INTERVAL_MAX - SCREEN_CHECK_INTERVAL_MIN).count() * (1.0 - progress)
+            (SCREEN_CHECK_INTERVAL_MAX - SCREEN_CHECK_INTERVAL_MIN).count() * progress
         );
         return std::chrono::seconds(interval);
     }
 
-    std::chrono::seconds getProcessCheckInterval(const std::string& package_name, int current_hour) const {
+    std::chrono::seconds getProcessCheckInterval(const std::string& package_name) const {
         auto it = habits_.app_stats.find(package_name);
         if (it == habits_.app_stats.end()) {
             return PROCESS_CHECK_INTERVAL_DEFAULT;
         }
         
-        // 检查应用是否在当前时段活跃
-        bool is_active_hour = false;
-        auto active_hours = it->second.getActiveHours();
-        if (std::find(active_hours.begin(), active_hours.end(), current_hour) != active_hours.end()) {
-            is_active_hour = true;
-        }
-        
+        // 考虑应用重要性和当前时段
         double importance = it->second.importance_weight;
+        int current_hour = getCurrentHour();
+        const auto& pattern = habits_.daily_patterns[current_hour];
         
-        // 对活跃时段的重要应用使用更短的检查间隔
-        if (is_active_hour && importance > 50.0) {
-            return PROCESS_CHECK_INTERVAL_PRIORITY;
-        }
+        // 检查应用是否在当前时段活跃
+        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
+                                         pattern.active_apps.end(), 
+                                         package_name) != pattern.active_apps.end();
+        
+        // 活跃应用在其活跃时段检查更频繁
+        double time_factor = is_active_in_hour ? 0.7 : 1.0;
         
         auto interval = static_cast<long long>(
             PROCESS_CHECK_INTERVAL_MAX.count() -
-            (PROCESS_CHECK_INTERVAL_MAX - PROCESS_CHECK_INTERVAL_MIN).count() * (importance / 100.0)
+            (PROCESS_CHECK_INTERVAL_MAX - PROCESS_CHECK_INTERVAL_MIN).count() * 
+            (importance / 100.0) * time_factor
         );
+        
         interval = std::max(interval, static_cast<long long>(PROCESS_CHECK_INTERVAL_MIN.count()));
         return std::chrono::seconds(interval);
     }
 
-    std::chrono::seconds getKillInterval(const std::string& package_name, int current_hour) const {
+    std::chrono::seconds getKillInterval(const std::string& package_name) const {
         auto it = habits_.app_stats.find(package_name);
         if (it == habits_.app_stats.end()) {
             return KILL_INTERVAL_DEFAULT;
         }
         
+        // 重要应用有更长的后台存活时间
         double importance = it->second.importance_weight;
+        int current_hour = getCurrentHour();
         
         // 检查应用是否在当前时段活跃
-        bool is_active_hour = false;
-        auto active_hours = it->second.getActiveHours();
-        if (std::find(active_hours.begin(), active_hours.end(), current_hour) != active_hours.end()) {
-            is_active_hour = true;
-        }
+        const auto& pattern = habits_.daily_patterns[current_hour];
+        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
+                                         pattern.active_apps.end(), 
+                                         package_name) != pattern.active_apps.end();
         
-        // 对活跃时段的重要应用使用更长的杀进程间隔（更少杀进程）
-        if (is_active_hour && importance > 50.0) {
-            return KILL_INTERVAL_PRIORITY;
-        }
+        // 在活跃时段，即使在后台也给予更长的存活时间
+        double time_factor = is_active_in_hour ? 1.3 : 1.0;
         
         auto interval = static_cast<long long>(
             KILL_INTERVAL_MIN.count() +
-            (KILL_INTERVAL_MAX - KILL_INTERVAL_MIN).count() * (importance / 100.0)
+            (KILL_INTERVAL_MAX - KILL_INTERVAL_MIN).count() * 
+            (importance / 100.0) * time_factor
         );
+        
         interval = std::min(interval, static_cast<long long>(KILL_INTERVAL_MAX.count()));
         return std::chrono::seconds(interval);
     }
 
-    std::chrono::seconds getScreenOffSleepInterval(int current_hour) const {
-        // 在用户不活跃的时段使用更长的休眠间隔
-        if (habits_.daily_patterns[current_hour].activity_level < 0.2) {
-            return SCREEN_OFF_SLEEP_INTERVAL_LONG;
-        }
+    std::chrono::seconds getScreenOffSleepInterval() const {
         return SCREEN_OFF_SLEEP_INTERVAL;
     }
 
@@ -418,59 +428,45 @@ private:
     const UserHabits& habits_;
     static constexpr auto SCREEN_CHECK_INTERVAL_MIN = std::chrono::seconds(30);
     static constexpr auto SCREEN_CHECK_INTERVAL_MAX = std::chrono::minutes(5);
-    static constexpr auto SCREEN_CHECK_INTERVAL_ACTIVE = std::chrono::seconds(20); // 活跃时段更短间隔
     static constexpr auto PROCESS_CHECK_INTERVAL_MIN = std::chrono::seconds(45);
     static constexpr auto PROCESS_CHECK_INTERVAL_MAX = std::chrono::minutes(3);
     static constexpr auto PROCESS_CHECK_INTERVAL_DEFAULT = std::chrono::minutes(1);
-    static constexpr auto PROCESS_CHECK_INTERVAL_PRIORITY = std::chrono::seconds(30); // 优先应用更短间隔
     static constexpr auto KILL_INTERVAL_MIN = std::chrono::minutes(5);
     static constexpr auto KILL_INTERVAL_MAX = std::chrono::minutes(30);
     static constexpr auto KILL_INTERVAL_DEFAULT = std::chrono::minutes(10);
-    static constexpr auto KILL_INTERVAL_PRIORITY = std::chrono::minutes(40); // 优先应用更长间隔
     static constexpr auto SCREEN_OFF_SLEEP_INTERVAL = std::chrono::minutes(1);
-    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LONG = std::chrono::minutes(3); // 不活跃时段更长休眠
 };
 
-// 增强的用户习惯管理器
 class UserHabitManager {
 public:
-    UserHabitManager() : last_save_time(std::chrono::steady_clock::now()) { 
+    UserHabitManager() { 
         loadHabits(); 
+        habits.last_save = std::chrono::system_clock::now();
     }
     
-    ~UserHabitManager() { 
-        saveHabits(); 
-    }
+    ~UserHabitManager() { saveHabits(); }
 
     void updateAppStats(const std::string& package_name, bool is_foreground, int duration) {
         auto& stats = habits.app_stats[package_name];
         auto now = std::chrono::system_clock::now();
         auto tt = std::chrono::system_clock::to_time_t(now);
-        auto tm = *localtime(&tt);
-        int hour = tm.tm_hour;
-        int day = tm.tm_mday;
-        int day_of_week = tm.tm_wday;
+        int hour = localtime(&tt)->tm_hour;
 
         if (is_foreground) {
-            stats.updateForegroundTime(duration, hour, day);
-            // 更新时间模式，记录活跃应用
-            habits.updateTimePattern(hour, 1.0, 1, package_name);
+            stats.updateForegroundTime(duration, hour);
         } else {
             stats.updateBackgroundTime(duration);
         }
-        
         stats.switch_count++;
         stats.updateImportanceWeight();
         habits.app_switch_frequency++;
-        
-        // 更新每周活跃度
-        if (habits.last_active_day != day) {
-            habits.last_active_day = day;
-            habits.updateDayActivity(day_of_week, 1.0);
-        }
-        
         updateHabits();
-        checkSaveHabits();
+        
+        // 检查是否应该保存习惯数据
+        if (habits.shouldSaveNow()) {
+            saveHabits();
+            habits.updateLastSaveTime();
+        }
     }
 
     void updateScreenStats(bool is_screen_on, int duration) {
@@ -478,39 +474,42 @@ public:
             habits.screen_on_duration_avg * (1 - habits.learning_weight) +
             duration * habits.learning_weight
         );
-        
         if (is_screen_on) {
             for (auto& [pkg, stats] : habits.app_stats) {
                 stats.updateImportanceWeight();
             }
         }
-        
         updateHabits();
-        checkSaveHabits();
+        
+        // 检查是否应该保存习惯数据
+        if (habits.shouldSaveNow()) {
+            saveHabits();
+            habits.updateLastSaveTime();
+        }
     }
 
     const UserHabits& getHabits() const { return habits; }
 
 private:
     UserHabits habits;
-    std::chrono::steady_clock::time_point last_save_time;
-    static constexpr int SAVE_INTERVAL_SAMPLES = 5; // 样本数间隔
-    static constexpr auto SAVE_INTERVAL_TIME = std::chrono::minutes(15); // 时间间隔
 
     void updateHabits() {
         habits.habit_samples++;
         habits.last_update = std::chrono::system_clock::now();
         habits.updateLearningProgress();
 
-        auto now = std::chrono::system_clock::now();
-        auto tt = std::chrono::system_clock::to_time_t(now);
-        auto tm = *localtime(&tt);
-        int hour = tm.tm_hour;
-        int day_of_week = tm.tm_wday;
-        
+        int hour = getCurrentHour();
         double activity = calculateActivityLevel();
-        habits.updateTimePattern(hour, activity, habits.app_switch_frequency);
-        habits.updateDayActivity(day_of_week, activity);
+        
+        // 收集当前活跃的应用
+        std::vector<std::string> active_apps;
+        for (const auto& [pkg, stats] : habits.app_stats) {
+            if (stats.importance_weight > 20.0 || stats.last_usage_hour == hour) {
+                active_apps.push_back(pkg);
+            }
+        }
+        
+        habits.updateTimePattern(hour, activity, habits.app_switch_frequency, active_apps);
     }
 
     double calculateActivityLevel() const {
@@ -520,7 +519,7 @@ private:
         int active_apps = 0;
         
         for (const auto& [pkg, stats] : habits.app_stats) {
-            if (stats.importance_weight > 10.0) { // 只考虑重要性超过阈值的应用
+            if (stats.importance_weight > 0) {
                 total_activity += stats.importance_weight;
                 active_apps++;
             }
@@ -528,31 +527,14 @@ private:
         
         return active_apps > 0 ? total_activity / active_apps : 0.0;
     }
-    
-    void checkSaveHabits() {
-        auto now = std::chrono::steady_clock::now();
-        bool should_save = false;
-        
-        // 根据样本数量判断是否保存
-        if (habits.habit_samples % SAVE_INTERVAL_SAMPLES == 0) {
-            should_save = true;
-        }
-        
-        // 根据时间间隔判断是否保存
-        if (now - last_save_time >= SAVE_INTERVAL_TIME) {
-            should_save = true;
-        }
-        
-        if (should_save) {
-            saveHabits();
-            last_save_time = now;
-        }
-    }
 
     void loadHabits() {
         const std::string config_path = "/data/adb/modules/DeepSuppressor/module_settings/user_habits.json";
         int fd = open(config_path.c_str(), O_RDONLY);
-        if (fd == -1) return;
+        if (fd == -1) {
+            Logger::log(Logger::Level::INFO, "No existing habits file found, starting fresh");
+            return;
+        }
 
         std::string content;
         char buffer[4096];
@@ -564,56 +546,69 @@ private:
 
         try {
             auto j = nlohmann::json::parse(content);
-            for (auto& [pkg, stats_json] : j["app_stats"].items()) {
-                AppStats stats;
-                stats.usage_count = stats_json["usage_count"];
-                stats.total_foreground_time = stats_json["total_foreground_time"];
-                stats.total_background_time = stats_json["total_background_time"];
-                stats.switch_count = stats_json["switch_count"];
-                stats.importance_weight = stats_json["importance_weight"];
-                stats.last_usage_hour = stats_json["last_usage_hour"];
-                stats.usage_pattern_score = stats_json["usage_pattern_score"];
-                stats.consecutive_days_used = stats_json.value("consecutive_days_used", 0);
-                stats.last_used_day = stats_json.value("last_used_day", -1);
-                
-                // 加载每小时使用情况
-                if (stats_json.contains("hourly_usage")) {
-                    for (size_t i = 0; i < 24; ++i) {
-                        stats.hourly_usage[i] = stats_json["hourly_usage"][i];
-                    }
-                }
-                
-                habits.app_stats[pkg] = stats;
-            }
             
-            habits.screen_on_duration_avg = j["screen_on_duration_avg"];
-            habits.app_switch_frequency = j["app_switch_frequency"];
-            habits.habit_samples = j["habit_samples"];
-            habits.last_update = std::chrono::system_clock::from_time_t(j["last_update"]);
-            habits.learning_weight = j["learning_weight"];
-            habits.learning_hours = j["learning_hours"];
-            habits.learning_complete = j["learning_complete"];
-            habits.last_active_day = j.value("last_active_day", -1);
-            
-            // 加载每周活跃度
-            if (j.contains("day_of_week_activity")) {
-                for (size_t i = 0; i < 7; ++i) {
-                    habits.day_of_week_activity[i] = j["day_of_week_activity"][i];
-                }
-            }
-            
-            // 加载 daily_patterns
-            if (j.contains("daily_patterns")) {
-                for (size_t i = 0; i < 24; ++i) {
-                    auto& pattern = habits.daily_patterns[i];
-                    pattern.hour = j["daily_patterns"][i]["hour"];
-                    pattern.activity_level = j["daily_patterns"][i]["activity_level"];
-                    pattern.check_frequency = j["daily_patterns"][i]["check_frequency"];
+            // 加载应用统计信息
+            if (j.contains("app_stats") && j["app_stats"].is_object()) {
+                for (auto& [pkg, stats_json] : j["app_stats"].items()) {
+                    AppStats stats;
                     
-                    // 加载活跃应用
-                    if (j["daily_patterns"][i].contains("active_apps")) {
-                        for (const auto& app : j["daily_patterns"][i]["active_apps"]) {
-                            pattern.active_apps.push_back(app);
+                    // 基本统计信息
+                    stats.usage_count = stats_json.value("usage_count", 0);
+                    stats.total_foreground_time = stats_json.value("total_foreground_time", 0);
+                    stats.total_background_time = stats_json.value("total_background_time", 0);
+                    stats.switch_count = stats_json.value("switch_count", 0);
+                    stats.importance_weight = stats_json.value("importance_weight", 0.0);
+                    stats.last_usage_hour = stats_json.value("last_usage_hour", -1);
+                    stats.usage_pattern_score = stats_json.value("usage_pattern_score", 0.0);
+                    
+                    // 新增字段
+                    stats.last_used_day = stats_json.value("last_used_day", -1);
+                    stats.consecutive_days_used = stats_json.value("consecutive_days_used", 0);
+                    
+                    // 小时使用情况
+                    if (stats_json.contains("hourly_usage") && stats_json["hourly_usage"].is_array()) {
+                        auto& hourly_array = stats_json["hourly_usage"];
+                        for (size_t i = 0; i < std::min(size_t(24), hourly_array.size()); ++i) {
+                            stats.hourly_usage[i] = hourly_array[i];
+                        }
+                    }
+                    
+                    habits.app_stats[pkg] = stats;
+                }
+            }
+            
+            // 基本习惯信息
+            habits.screen_on_duration_avg = j.value("screen_on_duration_avg", 0);
+            habits.app_switch_frequency = j.value("app_switch_frequency", 0);
+            habits.habit_samples = j.value("habit_samples", 0);
+            habits.learning_weight = j.value("learning_weight", 0.7);
+            habits.learning_hours = j.value("learning_hours", 0);
+            habits.learning_complete = j.value("learning_complete", false);
+            
+            // 时间戳转换
+            if (j.contains("last_update")) {
+                habits.last_update = std::chrono::system_clock::from_time_t(j["last_update"]);
+            } else {
+                habits.last_update = std::chrono::system_clock::now();
+            }
+            
+            // 加载每日模式
+            if (j.contains("daily_patterns") && j["daily_patterns"].is_array()) {
+                auto& patterns_array = j["daily_patterns"];
+                for (size_t i = 0; i < std::min(size_t(24), patterns_array.size()); ++i) {
+                    auto& pattern_json = patterns_array[i];
+                    auto& pattern = habits.daily_patterns[i];
+                    
+                    pattern.hour = pattern_json.value("hour", static_cast<int>(i));
+                    pattern.activity_level = pattern_json.value("activity_level", 0.0);
+                    pattern.check_frequency = pattern_json.value("check_frequency", 0);
+                    
+                    // 加载活跃应用列表
+                    if (pattern_json.contains("active_apps") && pattern_json["active_apps"].is_array()) {
+                        for (const auto& app : pattern_json["active_apps"]) {
+                            if (app.is_string()) {
+                                pattern.active_apps.push_back(app);
+                            }
                         }
                     }
                 }
@@ -623,28 +618,24 @@ private:
         } catch (const std::exception& e) {
             Logger::log(Logger::Level::WARN, std::format("Failed to load user habits: {}", e.what()));
         }
-        
-        // 确保 last_update 总是有效
-        if (habits.last_update == std::chrono::system_clock::time_point{}) {
-            habits.last_update = std::chrono::system_clock::now();
-        }
     }
 
     void saveHabits() {
         const std::string config_path = "/data/adb/modules/DeepSuppressor/module_settings/user_habits.json";
-        const std::string temp_path = config_path + ".tmp";
-        
-        // 先写入临时文件，成功后再重命名，避免写入过程中崩溃导致文件损坏
-        int fd = open(temp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int fd = open(config_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd == -1) {
-            Logger::log(Logger::Level::ERROR, "Failed to open temporary habits file for writing");
+            Logger::log(Logger::Level::ERROR, "Failed to open habits file for writing");
             return;
         }
 
         try {
             nlohmann::json j;
+            
+            // 保存应用统计信息
             for (const auto& [pkg, stats] : habits.app_stats) {
                 nlohmann::json stats_json;
+                
+                // 基本统计信息
                 stats_json["usage_count"] = stats.usage_count;
                 stats_json["total_foreground_time"] = stats.total_foreground_time;
                 stats_json["total_background_time"] = stats.total_background_time;
@@ -652,10 +643,12 @@ private:
                 stats_json["importance_weight"] = stats.importance_weight;
                 stats_json["last_usage_hour"] = stats.last_usage_hour;
                 stats_json["usage_pattern_score"] = stats.usage_pattern_score;
-                stats_json["consecutive_days_used"] = stats.consecutive_days_used;
-                stats_json["last_used_day"] = stats.last_used_day;
                 
-                // 保存每小时使用情况
+                // 新增字段
+                stats_json["last_used_day"] = stats.last_used_day;
+                stats_json["consecutive_days_used"] = stats.consecutive_days_used;
+                
+                // 小时使用情况
                 nlohmann::json hourly_array = nlohmann::json::array();
                 for (int usage : stats.hourly_usage) {
                     hourly_array.push_back(usage);
@@ -665,6 +658,7 @@ private:
                 j["app_stats"][pkg] = stats_json;
             }
             
+            // 基本习惯信息
             j["screen_on_duration_avg"] = habits.screen_on_duration_avg;
             j["app_switch_frequency"] = habits.app_switch_frequency;
             j["habit_samples"] = habits.habit_samples;
@@ -672,16 +666,8 @@ private:
             j["learning_weight"] = habits.learning_weight;
             j["learning_hours"] = habits.learning_hours;
             j["learning_complete"] = habits.learning_complete;
-            j["last_active_day"] = habits.last_active_day;
-            
-            // 保存每周活跃度
-            nlohmann::json day_activity_array = nlohmann::json::array();
-            for (double activity : habits.day_of_week_activity) {
-                day_activity_array.push_back(activity);
-            }
-            j["day_of_week_activity"] = day_activity_array;
 
-            // 保存 daily_patterns
+            // 保存每日模式
             nlohmann::json patterns_array = nlohmann::json::array();
             for (const auto& pattern : habits.daily_patterns) {
                 nlohmann::json pattern_json;
@@ -689,12 +675,12 @@ private:
                 pattern_json["activity_level"] = pattern.activity_level;
                 pattern_json["check_frequency"] = pattern.check_frequency;
                 
-                // 保存活跃应用
-                nlohmann::json apps_array = nlohmann::json::array();
+                // 保存活跃应用列表
+                nlohmann::json active_apps_array = nlohmann::json::array();
                 for (const auto& app : pattern.active_apps) {
-                    apps_array.push_back(app);
+                    active_apps_array.push_back(app);
                 }
-                pattern_json["active_apps"] = apps_array;
+                pattern_json["active_apps"] = active_apps_array;
                 
                 patterns_array.push_back(pattern_json);
             }
@@ -703,25 +689,14 @@ private:
             std::string json_str = j.dump(4);
             write(fd, json_str.c_str(), json_str.length());
             fsync(fd);
-            ::close(fd);
-            
-            // 重命名临时文件为正式文件
-            if (rename(temp_path.c_str(), config_path.c_str()) != 0) {
-                Logger::log(Logger::Level::ERROR, "Failed to rename temporary habits file");
-                unlink(temp_path.c_str()); // 删除临时文件
-                return;
-            }
-            
             Logger::log(Logger::Level::INFO, "User habits saved successfully");
         } catch (const std::exception& e) {
             Logger::log(Logger::Level::ERROR, std::format("Failed to save user habits: {}", e.what()));
-            ::close(fd);
-            unlink(temp_path.c_str()); // 删除临时文件
         }
+        ::close(fd);
     }
 };
 
-// 优化的进程管理器
 class ProcessManager {
 private:
     static constexpr auto INITIAL_SCREEN_CHECK_DELAY = std::chrono::minutes(5); // 减少初始延迟
@@ -732,8 +707,6 @@ private:
     std::map<std::string, std::chrono::steady_clock::time_point> last_process_check_times;
     UserHabitManager habit_manager;
     IntervalManager interval_manager;
-    std::chrono::steady_clock::time_point last_save_check;
-    std::mt19937 random_engine{std::random_device{}()}; // 随机数生成器，用于抖动
 
     struct Target {
         std::string package_name;
@@ -742,18 +715,16 @@ private:
         std::chrono::steady_clock::time_point last_background_time;
         int switch_count{ 0 };
         std::chrono::steady_clock::time_point last_switch_time;
-        int kill_attempts{ 0 }; // 记录杀进程尝试次数
-        bool is_protected{ false }; // 标记是否为受保护应用
 
-        Target(std::string pkg, std::vector<std::string> procs, bool protected_app = false)
-            : package_name(std::move(pkg)), process_names(std::move(procs)), 
-              is_foreground(true), is_protected(protected_app) {}
+        Target(std::string pkg, std::vector<std::string> procs)
+            : package_name(std::move(pkg)), process_names(std::move(procs)), is_foreground(false),
+              last_switch_time(std::chrono::steady_clock::now()) {}
     };
 
     std::vector<Target> targets;
 
     static std::string executeCommand(const std::string& cmd) {
-        std::array<char, 128> buffer;
+        std::array<char, 256> buffer; // 增加缓冲区大小
         std::string result;
         FILE* pipe = popen(cmd.c_str(), "r");
         if (!pipe) {
@@ -777,7 +748,7 @@ private:
         size_t pos = output.find(target);
         if (pos == std::string::npos) {
             Logger::log(Logger::Level::WARN, "Failed to find screen state in dumpsys display output");
-            return false;
+            return true; // 默认屏幕开启，避免误杀进程
         }
         
         // 获取状态值
@@ -790,31 +761,18 @@ private:
         // 提取并比较状态值
         std::string state = output.substr(pos, end - pos);
         bool screen_on = state.find("ON") != std::string::npos;
-        Logger::log(Logger::Level::INFO, "Screen state: " + state + " (is_on=" + (screen_on ? "true" : "false") + ")");
+        Logger::log(Logger::Level::INFO, "Screen state: " + state + " (" + (screen_on ? "on" : "off") + ")");
         return screen_on;
     }
 
     bool shouldCheckProcesses(const std::string& package_name) {
-        auto now = getCurrentTime();
+        auto now = std::chrono::steady_clock::now();
         auto it = last_process_check_times.find(package_name);
         if (it == last_process_check_times.end()) {
             last_process_check_times[package_name] = now;
             return true;
         }
-        
-        // 获取当前时间信息
-        auto tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto tm = *localtime(&tt);
-        int current_hour = tm.tm_hour;
-        
-        // 获取检查间隔并添加随机抖动（±10%）以避免同步检查
-        auto base_interval = interval_manager.getProcessCheckInterval(package_name, current_hour);
-        std::uniform_int_distribution<> dist(-static_cast<int>(base_interval.count() * 0.1), 
-                                           static_cast<int>(base_interval.count() * 0.1));
-        auto jitter = std::chrono::seconds(dist(random_engine));
-        auto interval = base_interval + jitter;
-        
-        if (now - it->second >= interval) {
+        if (now - it->second >= interval_manager.getProcessCheckInterval(package_name)) {
             it->second = now;
             return true;
         }
@@ -822,50 +780,47 @@ private:
     }
 
     bool isProcessForeground(const std::string& package_name) noexcept {
-        // 优化前台检测逻辑，减少日志输出
         std::string output = executeCommand("dumpsys window");
         
-        // 使用更精确的正则表达式模式匹配
-        const std::string current_focus_pattern = "mCurrentFocus";
-        const std::string focused_window_pattern = "mFocusedWindow";
+        // 优化：只检查关键部分
+        const std::string focus_markers[] = {"mCurrentFocus", "mFocusedWindow"};
+        bool found_focus = false;
+        std::string current_pkg;
         
-        size_t current_focus_pos = output.find(current_focus_pattern);
-        size_t focused_window_pos = output.find(focused_window_pattern);
-        
-        // 检查两个关键位置
-        std::vector<size_t> positions;
-        if (current_focus_pos != std::string::npos) positions.push_back(current_focus_pos);
-        if (focused_window_pos != std::string::npos) positions.push_back(focused_window_pos);
-        
-        for (size_t pos : positions) {
-            // 找到行的结束位置
-            size_t line_end = output.find('\n', pos);
-            if (line_end == std::string::npos) line_end = output.length();
-            
-            // 提取整行
-            std::string line = output.substr(pos, line_end - pos);
-            
-            // 查找 Window{...} 模式
-            size_t window_start = line.find("Window{");
-            if (window_start != std::string::npos) {
-                size_t content_start = window_start + 7; // 跳过 "Window{"
-                size_t content_end = line.find('}', content_start);
+        for (const auto& marker : focus_markers) {
+            size_t pos = output.find(marker);
+            if (pos != std::string::npos) {
+                // 找到行的结束位置
+                size_t line_end = output.find('\n', pos);
+                if (line_end == std::string::npos) line_end = output.length();
                 
-                if (content_end != std::string::npos) {
-                    std::string window_content = line.substr(content_start, content_end - content_start);
+                // 提取这一行
+                std::string line = output.substr(pos, line_end - pos);
+                
+                // 查找 Window{...} 模式
+                size_t window_pos = line.find("Window{");
+                if (window_pos != std::string::npos) {
+                    // 找到 Window{...} 内容
+                    size_t content_start = window_pos + 7; // 跳过 "Window{"
+                    size_t content_end = line.find('}', content_start);
                     
-                    // 查找包含 '/' 的部分，这通常是包名/活动名格式
-                    size_t slash_pos = window_content.find('/');
-                    if (slash_pos != std::string::npos) {
-                        // 从斜杠向前查找包名的开始位置
-                        size_t pkg_start = window_content.rfind(' ', slash_pos);
-                        if (pkg_start != std::string::npos) {
-                            pkg_start++; // 跳过空格
-                            std::string current_pkg = window_content.substr(pkg_start, slash_pos - pkg_start);
-                            
-                            // 如果找到匹配的包名，立即返回
-                            if (current_pkg == package_name) {
-                                return true;
+                    if (content_end != std::string::npos) {
+                        std::string window_content = line.substr(content_start, content_end - content_start);
+                        
+                        // 查找包含 '/' 的部分，通常格式为 "hash u0 package.name/activity.name"
+                        size_t slash_pos = window_content.find('/');
+                        if (slash_pos != std::string::npos) {
+                            // 从斜杠向前查找包名的起始位置
+                            size_t pkg_start = window_content.rfind(' ', slash_pos);
+                            if (pkg_start != std::string::npos) {
+                                pkg_start++; // 跳过空格
+                                current_pkg = window_content.substr(pkg_start, slash_pos - pkg_start);
+                                found_focus = true;
+                                
+                                // 如果找到匹配的包名，立即返回
+                                if (current_pkg == package_name) {
+                                    return true;
+                                }
                             }
                         }
                     }
@@ -876,150 +831,106 @@ private:
         return false;
     }
 
-    void killProcess(const std::string& process_name, const std::string& package_name, Target& target) {
-        // 增加智能杀进程逻辑
-        target.kill_attempts++;
+    void killProcess(const std::string& process_name, const std::string& package_name) {
+        // 使用更可靠的方法杀死进程
+        std::string cmd = "am force-stop " + package_name;
+        system(cmd.c_str());
         
-        // 如果是受保护应用或者杀进程尝试次数过多，跳过杀进程
-        if (target.is_protected) {
-            Logger::log(Logger::Level::INFO, "Skipping kill for protected app: " + package_name);
-            return;
-        }
-        
-        if (target.kill_attempts > 10) {
-            // 如果多次尝试杀进程但失败，可能是系统应用或重要应用，标记为受保护
-            target.is_protected = true;
-            Logger::log(Logger::Level::INFO, "Marking app as protected due to multiple kill attempts: " + package_name);
-            return;
-        }
-        
-        // 执行杀进程操作
-        std::string cmd = "pkill -9 " + process_name;
-        if (system(cmd.c_str()) != 0) {
-            cmd = "kill -9 $(pidof " + process_name + ")";
-            system(cmd.c_str());
-        }
-        Logger::log(Logger::Level::INFO, "Killed process: " + process_name + " for package: " + package_name);
-    }
-
-    std::chrono::steady_clock::time_point getCurrentTime() const {
-        return std::chrono::steady_clock::now();
+        // 记录操作
+        Logger::log(Logger::Level::INFO, "Killed processes for package: " + package_name);
     }
 
     void checkScreenState() {
-        auto now = getCurrentTime();
+        auto now = std::chrono::steady_clock::now();
         if (now - start_time < INITIAL_SCREEN_CHECK_DELAY ||
-            now - last_screen_check < getScreenCheckInterval()) {
+            now - last_screen_check < interval_manager.getScreenCheckInterval()) {
             return;
         }
 
         bool previous_screen_state = is_screen_on;
         is_screen_on = isScreenOn();
-        last_screen_check = now;
-
+        
+        // 计算自上次检查以来的时间
         int duration = std::chrono::duration_cast<std::chrono::seconds>(now - last_screen_check).count();
-        habit_manager.updateScreenStats(is_screen_on, duration);
+        last_screen_check = now;
+        
+        // 更新屏幕统计信息
+        habit_manager.updateScreenStats(previous_screen_state, duration);
 
+        // 屏幕关闭时处理
         if (!is_screen_on && previous_screen_state) {
-            Logger::log(Logger::Level::INFO, "Screen turned off, entering sleep mode");
+            Logger::log(Logger::Level::INFO, "Screen turned off, entering deep sleep mode");
             handleScreenOff();
-        } else if (is_screen_on && !previous_screen_state) {
-            Logger::log(Logger::Level::INFO, "Screen turned on, resuming normal operation");
         }
     }
 
     void handleScreenOff() {
-        // 获取当前时间信息
-        auto tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto tm = *localtime(&tt);
-        int current_hour = tm.tm_hour;
-        
-        // 智能休眠：只杀死非重要应用
+        // 屏幕关闭时，杀死所有非前台应用
         for (auto& target : targets) {
-            if (!target.is_foreground && !target.is_protected) {
-                // 检查应用重要性
-                auto it = habit_manager.getHabits().app_stats.find(target.package_name);
-                if (it != habit_manager.getHabits().app_stats.end() && it->second.importance_weight < 50.0) {
-                    for (const auto& proc : target.process_names) {
-                        killProcess(proc, target.package_name, target);
-                    }
-                }
+            if (!target.is_foreground) {
+                killProcess(target.process_names[0], target.package_name);
             }
         }
-        
-        // 使用基于当前时段的休眠间隔
-        std::this_thread::sleep_for(interval_manager.getScreenOffSleepInterval(current_hour));
+        std::this_thread::sleep_for(interval_manager.getScreenOffSleepInterval());
     }
 
     void checkProcesses() {
         bool any_active = false;
+        std::vector<std::string> active_apps;
 
         for (auto& target : targets) {
             try {
-                bool check_processes = shouldCheckProcesses(target.package_name);
-                if (check_processes || target.is_foreground) {
+                bool should_check = shouldCheckProcesses(target.package_name);
+                if (should_check || target.is_foreground) {
                     bool current_foreground = isProcessForeground(target.package_name);
                     bool should_kill = false;
 
-                    auto now = getCurrentTime();
+                    auto now = std::chrono::steady_clock::now();
                     int duration = std::chrono::duration_cast<std::chrono::seconds>(
                         now - target.last_switch_time).count();
 
+                    // 状态变化处理
                     if (current_foreground != target.is_foreground) {
+                        // 更新状态
                         target.is_foreground = current_foreground;
-                        target.last_background_time = now;
-                        target.switch_count++;
                         target.last_switch_time = now;
+                        
+                        if (!current_foreground) {
+                            // 从前台切换到后台
+                            target.last_background_time = now;
+                        }
+                        
+                        target.switch_count++;
                         habit_manager.updateAppStats(target.package_name, current_foreground, duration);
+                        
                         Logger::log(Logger::Level::INFO, "Package " + target.package_name +
                             (current_foreground ? " moved to foreground" : " moved to background"));
                     }
 
-                    // 获取当前时间信息
-                    auto tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-                    auto tm = *localtime(&tt);
-                    int current_hour = tm.tm_hour;
-                    
-                    // 严格的前台保护：只有在确认不在前台时才考虑杀死进程
-                    if (!current_foreground && !target.is_foreground && check_processes) {
+                    // 确定是否应该杀死进程
+                    if (!current_foreground && !target.is_foreground && should_check) {
                         auto background_duration = now - target.last_background_time;
-                        auto kill_interval = interval_manager.getKillInterval(target.package_name, current_hour);
+                        auto kill_interval = interval_manager.getKillInterval(target.package_name);
                         
-                        // 检查应用是否在当前时段活跃
-                        bool is_active_hour = false;
-                        auto it = habit_manager.getHabits().app_stats.find(target.package_name);
-                        if (it != habit_manager.getHabits().app_stats.end()) {
-                            auto active_hours = it->second.getActiveHours();
-                            if (std::find(active_hours.begin(), active_hours.end(), current_hour) != active_hours.end()) {
-                                is_active_hour = true;
-                            }
-                        }
-                        
-                        // 在活跃时段给予更长的宽限期
-                        if (is_active_hour) {
-                            kill_interval *= 2; // 活跃时段杀进程间隔加倍
-                        }
-                        
-                        if (background_duration >= kill_interval && !target.is_protected) {
+                        if (background_duration >= kill_interval) {
                             should_kill = true;
                             Logger::log(Logger::Level::INFO, 
-                                std::format("Marking {} for kill - background for {}s, threshold {}s", 
+                                std::format("Killing {} - background for {}s", 
                                 target.package_name, 
-                                std::chrono::duration_cast<std::chrono::seconds>(background_duration).count(),
-                                kill_interval.count()));
+                                std::chrono::duration_cast<std::chrono::seconds>(background_duration).count()));
                         }
-                    } else if (current_foreground) {
-                        // 重置杀进程尝试计数
-                        target.kill_attempts = 0;
                     }
 
+                    // 执行杀死进程
                     if (should_kill) {
-                        for (const auto& proc : target.process_names) {
-                            killProcess(proc, target.package_name, target);
-                        }
+                        killProcess(target.process_names[0], target.package_name);
                     }
 
-                    if (current_foreground) any_active = true;
+                    // 记录活跃应用
+                    if (current_foreground) {
+                        any_active = true;
+                        active_apps.push_back(target.package_name);
+                    }
                 }
             } catch (const std::exception& e) {
                 Logger::log(Logger::Level::ERROR,
@@ -1027,85 +938,49 @@ private:
             }
         }
 
-        // 检查是否需要保存用户习惯数据
-        auto now = getCurrentTime();
-        if (now - last_save_check >= std::chrono::minutes(5)) { // 每5分钟检查一次
-            last_save_check = now;
-            // 这里不直接调用saveHabits，而是通过UserHabitManager的机制来决定是否保存
-            habit_manager.updateScreenStats(is_screen_on, 0); // 触发检查保存逻辑
-        }
-
-        // 根据是否有活跃应用调整休眠时间
-        std::this_thread::sleep_for(any_active ?
-            getProcessCheckInterval() :
-            getScreenCheckInterval());
-    }
-    
-    std::chrono::seconds getScreenCheckInterval() const {
-        // 获取当前时间信息
-        auto tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto tm = *localtime(&tt);
-        int current_hour = tm.tm_hour;
-        int day_of_week = tm.tm_wday;
-        
-        return interval_manager.getScreenCheckInterval(current_hour, day_of_week);
-    }
-    
-    std::chrono::seconds getProcessCheckInterval() const {
-        // 如果没有目标，使用默认间隔
-        if (targets.empty()) {
-            return std::chrono::minutes(1);
-        }
-        
-        // 获取当前时间信息
-        auto tt = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-        auto tm = *localtime(&tt);
-        int current_hour = tm.tm_hour;
-        
-        // 使用第一个前台应用的检查间隔
-        for (const auto& target : targets) {
-            if (target.is_foreground) {
-                return interval_manager.getProcessCheckInterval(target.package_name, current_hour);
-            }
-        }
-        
-        // 如果没有前台应用，使用第一个目标的间隔
-        return interval_manager.getProcessCheckInterval(targets[0].package_name, current_hour);
+        // 根据当前活跃状态决定下次检查间隔
+        auto sleep_time = any_active ?
+            interval_manager.getProcessCheckInterval(active_apps.empty() ? "" : active_apps[0]) :
+            interval_manager.getScreenCheckInterval();
+            
+        std::this_thread::sleep_for(sleep_time);
     }
 
 public:
     explicit ProcessManager(const std::vector<std::pair<std::string, std::vector<std::string>>>& initial_targets)
-        : start_time(getCurrentTime()), 
-          interval_manager(habit_manager.getHabits()),
-          last_save_check(getCurrentTime()) {
-        
+        : start_time(std::chrono::steady_clock::now()), interval_manager(habit_manager.getHabits()) {
         for (const auto& [pkg, procs] : initial_targets) {
             if (!pkg.empty() && !procs.empty()) {
-                // 检查是否为系统应用（简单判断）
-                bool is_system_app = pkg.find("android") != std::string::npos || 
-                                    pkg.find("google") != std::string::npos || 
-                                    pkg.find("system") != std::string::npos;
-                
-                targets.emplace_back(pkg, procs, is_system_app);
-                Logger::log(Logger::Level::INFO, std::format("Added target: {} with {} processes{}", 
-                    pkg, procs.size(), is_system_app ? " (protected)" : ""));
+                targets.emplace_back(pkg, procs);
+                Logger::log(Logger::Level::INFO, std::format("Added target: {} with {} processes", pkg, procs.size()));
             }
         }
     }
 
     void start() {
         Logger::log(Logger::Level::INFO, std::format("Process manager started with {} targets", targets.size()));
-        last_screen_check = getCurrentTime();
+        last_screen_check = std::chrono::steady_clock::now();
 
         while (running) {
             try {
+                // 检查屏幕状态
                 checkScreenState();
-                if (is_screen_on) checkProcesses();
-                else std::this_thread::sleep_for(getScreenCheckInterval());
+                
+                // 根据屏幕状态决定行为
+                if (is_screen_on) {
+                    checkProcesses();
+                } else {
+                    // 屏幕关闭时使用较长的休眠时间
+                    std::this_thread::sleep_for(interval_manager.getScreenOffSleepInterval());
+                }
+                
+                // 定期保存用户习惯数据
+                if (habit_manager.getHabits().shouldSaveNow()) {
+                    Logger::log(Logger::Level::INFO, "Periodic habit data save");
+                }
             } catch (const std::exception& e) {
                 Logger::log(Logger::Level::ERROR, std::format("Error in main loop: {}", e.what()));
-                // 添加短暂休眠以避免在错误情况下CPU使用率过高
-                std::this_thread::sleep_for(std::chrono::seconds(5));
+                std::this_thread::sleep_for(std::chrono::seconds(10)); // 错误恢复延迟
             }
         }
     }
