@@ -1158,7 +1158,6 @@ private:
         
         // 优化：只检查关键部分
         const std::string focus_markers[] = {"mCurrentFocus", "mFocusedWindow"};
-        bool found_focus = false;
         std::string current_pkg;
         
         for (const auto& marker : focus_markers) {
@@ -1189,7 +1188,6 @@ private:
                             if (pkg_start != std::string::npos) {
                                 pkg_start++; // 跳过空格
                                 current_pkg = window_content.substr(pkg_start, slash_pos - pkg_start);
-                                found_focus = true;
                                 
                                 // 如果找到匹配的包名，立即返回
                                 if (current_pkg == package_name) {
@@ -1206,12 +1204,35 @@ private:
     }
 
     void killProcess(const std::string& process_name, const std::string& package_name) {
-        // 使用更可靠的方法杀死进程
+        // 获取进程PID
+        std::string pid_cmd = "pidof " + process_name;
+        std::string pid_output = executeCommand(pid_cmd);
+        
+        if (!pid_output.empty()) {
+            try {
+                int pid = std::stoi(pid_output);
+                // 使用kill命令杀死指定进程
+                std::string kill_cmd = "kill -9 " + std::to_string(pid);
+                system(kill_cmd.c_str());
+                
+                // 记录操作
+                Logger::log(Logger::Level::INFO, std::format("Killed process: {} (PID: {}) for package: {}", 
+                    process_name, pid, package_name));
+                stats.total_processes_killed++;
+                stats.killed_count_by_package[package_name]++;
+                return;
+            } catch (const std::exception& e) {
+                // PID解析失败，回退到杀死整个应用包
+                Logger::log(Logger::Level::WARN, std::format("Failed to parse PID for process {}, falling back to package kill", process_name));
+            }
+        }
+        
+        // 如果无法获取PID或解析失败，回退到杀死整个应用包
         std::string cmd = "am force-stop " + package_name;
         system(cmd.c_str());
         
         // 记录操作
-        Logger::log(Logger::Level::INFO, "Killed processes for package: " + package_name);
+        Logger::log(Logger::Level::INFO, std::format("Killed entire package: {}", package_name));
         stats.total_processes_killed++;
         stats.killed_count_by_package[package_name]++;
     }
@@ -1533,9 +1554,9 @@ private:
 
 public:
     explicit ProcessManager(const std::vector<std::pair<std::string, std::vector<std::string>>>& initial_targets)
-        : start_time(std::chrono::steady_clock::now()), 
-          interval_manager(habit_manager.getHabits(), habit_manager),
-          last_additional_data_capture(std::chrono::steady_clock::now()) {
+        : start_time(std::chrono::steady_clock::now()),
+          last_additional_data_capture(std::chrono::steady_clock::now()),
+          interval_manager(habit_manager.getHabits(), habit_manager) {
         for (const auto& [pkg, procs] : initial_targets) {
             if (!pkg.empty() && !procs.empty()) {
                 targets.emplace_back(pkg, procs);
