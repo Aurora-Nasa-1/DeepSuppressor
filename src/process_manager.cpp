@@ -362,26 +362,6 @@ struct UserHabits {
     }
 };
 
-// UserHabitManager类的前向声明
-class UserHabitManager {
-public:
-    enum class LearningIntensity {
-        HIGH,    // 高频学习（前24小时）
-        MEDIUM,  // 中频学习（24-48小时）
-        LOW,     // 低频学习（48-72小时）
-        STABLE   // 稳定阶段（72小时后）
-    };
-    
-    UserHabitManager();
-    ~UserHabitManager();
-    void updateAppStats(const std::string& package_name, bool is_foreground, int duration);
-    void updateScreenStats(bool is_screen_on, int duration);
-    void captureAdditionalData();
-    const UserHabits& getHabits() const;
-    void adjustLearningIntensity();
-    LearningIntensity getLearningIntensity() const;
-};
-
 class IntervalManager {
 public:
     IntervalManager(const UserHabits& habits, const UserHabitManager& habit_manager) 
@@ -587,7 +567,12 @@ public:
         habits.last_full_save = habits.last_save;
         init_learning_phase();
     }
-    
+        enum class LearningIntensity {
+        HIGH,    // 高频学习（前24小时）
+        MEDIUM,  // 中频学习（24-48小时）
+        LOW,     // 低频学习（48-72小时）
+        STABLE   // 稳定阶段（72小时后）
+    };
     ~UserHabitManager() { saveHabits(true); }
 
     void updateAppStats(const std::string& package_name, bool is_foreground, int duration) {
