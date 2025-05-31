@@ -1,0 +1,18 @@
+{
+    "suppress_apps": {
+      "com.tencent.mm": {
+        "enabled": true,
+        "processes": [
+          "com.tencent.mm:appbrand0",
+          "com.tencent.mm:appbrand1"
+        ]
+      },
+      "com.tencent.tim": {
+        "enabled": true,
+        "processes": [
+          "com.tencent.tim:appbrand0",
+          "com.tencent.tim:video"
+        ]
+      }
+    }
+  }
