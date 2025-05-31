@@ -311,7 +311,12 @@ public:
 
     void updateScreenStats(bool is_screen_on, int duration) {
         std::lock_guard<std::mutex> lock(habits_mutex);
-        if (is_screen_on) for (auto& [pkg, stats] : habits.app_stats) stats.updateImportanceWeight();
+        if (is_screen_on) {
+            for (auto& [pkg, stats] : habits.app_stats) {
+                stats.updateImportanceWeight();
+            }
+        }
+        habits.habit_samples += duration / 60; // Use duration to increment habit samples (in minutes)
         updateHabits();
     }
 
@@ -320,7 +325,7 @@ public:
 
 private:
     UserHabits habits;
-    mutable std::mutex habits_mutex;
+    mutable std::mutex habits_mutex; // Added missing mutex
     std::string config_path = "/data/adb/modules/DeepSuppressor/module_settings/user_habits.json";
 
     void updateHabits() {
@@ -342,7 +347,7 @@ private:
         for (const auto& [pkg, stats] : habits.app_stats) {
             double time_weight = 1.0;
             if (stats.last_usage_hour >= 0) {
-                int hour_diff = (current_hour >= stats.last_usage_hour) ? 
+                int hour_diff = (current_hour >= stats.last_usage_hour) ?
                     current_hour - stats.last_usage_hour : current_hour + 24 - stats.last_usage_hour;
                 time_weight = std::exp(-hour_diff / 12.0);
             }
@@ -641,19 +646,29 @@ public:
 
     void forceCheck() { force_check = true; cv.notify_all(); }
 };
-// In UserHabitManager class
-void updateScreenStats(bool is_screen_on, int duration) {
-    std::lock_guard<std::mutex> lock(habits_mutex);
-    if (is_screen_on) {
-        for (auto& [pkg, stats] : habits.app_stats) {
-            stats.updateImportanceWeight();
-        }
-    }
-    habits.habit_samples += duration / 60; // Use duration to increment habit samples (in minutes)
-    updateHabits();
-}
 
-// In main function, replace the signal handling part
+class ArgumentParser {
+public:
+    static std::vector<std::pair<std::string, std::vector<std::string>>> parse(int argc, char* argv[], int start_index) {
+        std::vector<std::pair<std::string, std::vector<std::string>>> result;
+        std::string current_package;
+        std::vector<std::string> current_processes;
+        for (int i = start_index; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg.find('.') != std::string::npos) {
+                if (!current_package.empty()) result.push_back({current_package, current_processes});
+                current_package = arg;
+                current_processes.clear();
+            } else {
+                if (current_package.empty()) continue;
+                current_processes.push_back(arg);
+            }
+        }
+        if (!current_package.empty()) result.push_back({current_package, current_processes});
+        return result;
+    }
+};
+
 int main(int argc, char* argv[]) {
     Logger::init(Logger::Level::INFO);
     if (argc < 3) {
@@ -676,24 +691,11 @@ int main(int argc, char* argv[]) {
     }
     ProcessManager manager(targets);
     manager.start();
-
-    // Signal handling using sigaction
     struct sigaction sa_term, sa_int, sa_usr1;
-    sa_term.sa_handler = [](int) {
-        Logger::log(Logger::Level::INFO, "Received SIGTERM, shutting down");
-        Logger::close();
-        exit(0);
-    };
-    sa_int.sa_handler = [](int) {
-        Logger::log(Logger::Level::INFO, "Received SIGINT, shutting down");
-        Logger::close();
-        exit(0);
-    };
-    static ProcessManager* manager_ptr = &manager; // Store manager pointer for SIGUSR1
-    sa_usr1.sa_handler = [](int) {
-        Logger::log(Logger::Level::INFO, "Received SIGUSR1, forcing process check");
-        manager_ptr->forceCheck();
-    };
+    sa_term.sa_handler = [](int) { Logger::log(Logger::Level::INFO, "Received SIGTERM, shutting down"); Logger::close(); exit(0); };
+    sa_int.sa_handler = [](int) { Logger::log(Logger::Level::INFO, "Received SIGINT, shutting down"); Logger::close(); exit(0); };
+    static ProcessManager* manager_ptr = &manager;
+    sa_usr1.sa_handler = [](int) { Logger::log(Logger::Level::INFO, "Received SIGUSR1, forcing process check"); manager_ptr->forceCheck(); };
     sigemptyset(&sa_term.sa_mask);
     sigemptyset(&sa_int.sa_mask);
     sigemptyset(&sa_usr1.sa_mask);
@@ -701,7 +703,6 @@ int main(int argc, char* argv[]) {
     sigaction(SIGTERM, &sa_term, nullptr);
     sigaction(SIGINT, &sa_int, nullptr);
     sigaction(SIGUSR1, &sa_usr1, nullptr);
-
     pause();
     Logger::log(Logger::Level::INFO, "Process manager shutting down");
     Logger::close();
