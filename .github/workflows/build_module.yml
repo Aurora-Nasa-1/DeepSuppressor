@@ -71,7 +71,7 @@ jobs:
           
       - name: Start Build
         run: |
-          cd./ammf2
+          cd ./ammf2
           . module_settings/config.sh
           LATEST_TAG=$(cat latest_tag.txt)
           CURRENT_TIME=$(cat current_time.txt)
