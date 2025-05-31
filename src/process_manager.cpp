@@ -284,281 +284,6 @@ struct TimePattern {
         }
     }
 };
-
-struct UserHabits {
-    std::map<std::string, AppStats> app_stats;
-    int screen_on_duration_avg{ 0 };
-    int app_switch_frequency{ 0 };
-    int habit_samples{ 0 };
-    std::chrono::system_clock::time_point last_update;
-    std::chrono::system_clock::time_point last_save;
-    std::chrono::system_clock::time_point last_full_save;
-    double learning_weight{ 0.7 };
-    std::array<TimePattern, 24> daily_patterns;
-    int learning_hours{ 0 };
-    bool learning_complete{ false };
-    std::map<std::string, AppStats> modified_stats; // 用于增量保存的修改记录
-    int save_version{ 0 }; // 保存版本号，用于检测文件变化
-    bool needs_full_save{ false }; // 标记是否需要完整保存
-
-    static constexpr int LEARNING_HOURS_TARGET = 72;
-    static constexpr int SAVE_INTERVAL_MINUTES = 30; // 每30分钟保存一次
-    static constexpr int FULL_SAVE_INTERVAL_HOURS = 12; // 每12小时完整保存一次
-
-    void updateTimePattern(int hour, double activity, int freq, const std::vector<std::string>& active_apps) {
-        daily_patterns[hour].hour = hour;
-        daily_patterns[hour].update(activity, freq, active_apps);
-    }
-
-    void updateLearningProgress() {
-        if (learning_complete) return;
-        
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_update);
-        learning_hours += duration.count();
-        last_update = now;
-        
-        // 随着学习时间增加，学习权重逐渐降低
-        learning_weight = std::max(0.0, 0.7 - (static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET * 0.7));
-        
-        if (learning_hours >= LEARNING_HOURS_TARGET) {
-            learning_complete = true;
-            learning_weight = 0.0;
-            needs_full_save = true;
-        }
-    }
-    
-    bool shouldSaveNow() const {
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - last_save);
-        return duration.count() >= SAVE_INTERVAL_MINUTES;
-    }
-    
-    bool shouldFullSaveNow() const {
-        auto now = std::chrono::system_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_full_save);
-        return duration.count() >= FULL_SAVE_INTERVAL_HOURS || needs_full_save;
-    }
-    
-    void updateLastSaveTime() {
-        last_save = std::chrono::system_clock::now();
-    }
-    
-    void updateLastFullSaveTime() {
-        last_full_save = std::chrono::system_clock::now();
-        last_save = last_full_save;
-        needs_full_save = false;
-    }
-    
-    void markAppModified(const std::string& package_name) {
-        auto it = app_stats.find(package_name);
-        if (it != app_stats.end()) {
-            modified_stats[package_name] = it->second;
-        }
-    }
-    
-    void clearModifiedApps() {
-        modified_stats.clear();
-    }
-};
-
-class IntervalManager {
-public:
-    IntervalManager(const UserHabits& habits, const UserHabitManager& habit_manager) 
-        : habits_(habits), habit_manager_(habit_manager) {}
-
-    std::chrono::seconds getScreenCheckInterval() const {
-        // 根据学习阶段调整检查间隔
-        auto intensity = habit_manager_.getLearningIntensity();
-        
-        // 根据当前时间段的活动水平调整屏幕检查间隔
-        int current_hour = getCurrentHour();
-        const auto& pattern = habits_.daily_patterns[current_hour];
-        
-        // 基于学习阶段设置基础间隔
-        std::chrono::seconds base_interval;
-        switch (intensity) {
-            case UserHabitManager::LearningIntensity::HIGH:
-                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_HIGH;
-                break;
-            case UserHabitManager::LearningIntensity::MEDIUM:
-                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_MEDIUM;
-                break;
-            case UserHabitManager::LearningIntensity::LOW:
-                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_LOW;
-                break;
-            case UserHabitManager::LearningIntensity::STABLE:
-                // 学习完成后，根据当前时段活动水平动态调整
-                double activity_factor = std::min(1.0, pattern.activity_level);
-                auto dynamic_interval = static_cast<int>(
-                    SCREEN_CHECK_INTERVAL_MAX.count() - 
-                    (SCREEN_CHECK_INTERVAL_MAX - SCREEN_CHECK_INTERVAL_MIN).count() * activity_factor
-                );
-                return std::chrono::seconds(dynamic_interval);
-        }
-        
-        // 在学习阶段，适当考虑时间模式，但以学习强度为主
-        double activity_factor = std::min(0.5, pattern.activity_level / 2);
-        auto adjusted_interval = static_cast<int>(
-            base_interval.count() * (1.0 - activity_factor)
-        );
-        
-        return std::chrono::seconds(adjusted_interval);
-    }
-
-    std::chrono::seconds getProcessCheckInterval(const std::string& package_name) const {
-        auto intensity = habit_manager_.getLearningIntensity();
-        
-        // 学习阶段使用更短的固定间隔
-        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
-            switch (intensity) {
-                case UserHabitManager::LearningIntensity::HIGH:
-                    return PROCESS_CHECK_INTERVAL_LEARNING_HIGH;
-                case UserHabitManager::LearningIntensity::MEDIUM:
-                    return PROCESS_CHECK_INTERVAL_LEARNING_MEDIUM;
-                case UserHabitManager::LearningIntensity::LOW:
-                    return PROCESS_CHECK_INTERVAL_LEARNING_LOW;
-                default:
-                    return PROCESS_CHECK_INTERVAL_DEFAULT;
-            }
-        }
-        
-        // 稳定阶段，基于学习到的用户习惯调整
-        auto it = habits_.app_stats.find(package_name);
-        if (it == habits_.app_stats.end()) {
-            return PROCESS_CHECK_INTERVAL_DEFAULT;
-        }
-        
-        // 考虑应用重要性和当前时段
-        double importance = it->second.importance_weight;
-        int current_hour = getCurrentHour();
-        const auto& pattern = habits_.daily_patterns[current_hour];
-        
-        // 检查应用是否在当前时段活跃
-        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
-                                         pattern.active_apps.end(), 
-                                         package_name) != pattern.active_apps.end();
-        
-        // 活跃应用在其活跃时段检查更频繁
-        double time_factor = is_active_in_hour ? 0.7 : 1.0;
-        
-        auto interval = static_cast<long long>(
-            PROCESS_CHECK_INTERVAL_MAX.count() -
-            (PROCESS_CHECK_INTERVAL_MAX - PROCESS_CHECK_INTERVAL_MIN).count() * 
-            (importance / 100.0) * time_factor
-        );
-        
-        interval = std::max(interval, static_cast<long long>(PROCESS_CHECK_INTERVAL_MIN.count()));
-        return std::chrono::seconds(interval);
-    }
-
-    std::chrono::seconds getKillInterval(const std::string& package_name) const {
-        auto intensity = habit_manager_.getLearningIntensity();
-        
-        // 学习阶段使用更短的固定间隔，但不会太短以避免误杀常用应用
-        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
-            // 即使在学习阶段，也要考虑应用重要性
-            auto it = habits_.app_stats.find(package_name);
-            if (it != habits_.app_stats.end() && it->second.importance_weight > 50.0) {
-                // 重要应用即使在学习阶段也应该有更长的存活时间
-                return KILL_INTERVAL_IMPORTANT_APP;
-            }
-            
-            switch (intensity) {
-                case UserHabitManager::LearningIntensity::HIGH:
-                    return KILL_INTERVAL_LEARNING_HIGH;
-                case UserHabitManager::LearningIntensity::MEDIUM:
-                    return KILL_INTERVAL_LEARNING_MEDIUM;
-                case UserHabitManager::LearningIntensity::LOW:
-                    return KILL_INTERVAL_LEARNING_LOW;
-                default:
-                    return KILL_INTERVAL_DEFAULT;
-            }
-        }
-        
-        // 稳定阶段，基于学习到的用户习惯调整
-        auto it = habits_.app_stats.find(package_name);
-        if (it == habits_.app_stats.end()) {
-            return KILL_INTERVAL_DEFAULT;
-        }
-        
-        // 重要应用有更长的后台存活时间
-        double importance = it->second.importance_weight;
-        int current_hour = getCurrentHour();
-        
-        // 检查应用是否在当前时段活跃
-        const auto& pattern = habits_.daily_patterns[current_hour];
-        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
-                                         pattern.active_apps.end(), 
-                                         package_name) != pattern.active_apps.end();
-        
-        // 在活跃时段，即使在后台也给予更长的存活时间
-        double time_factor = is_active_in_hour ? 1.3 : 1.0;
-        
-        auto interval = static_cast<long long>(
-            KILL_INTERVAL_MIN.count() +
-            (KILL_INTERVAL_MAX - KILL_INTERVAL_MIN).count() * 
-            (importance / 100.0) * time_factor
-        );
-        
-        interval = std::min(interval, static_cast<long long>(KILL_INTERVAL_MAX.count()));
-        return std::chrono::seconds(interval);
-    }
-
-    std::chrono::seconds getScreenOffSleepInterval() const {
-        auto intensity = habit_manager_.getLearningIntensity();
-        
-        // 学习阶段使用更短的休眠间隔
-        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
-            switch (intensity) {
-                case UserHabitManager::LearningIntensity::HIGH:
-                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_HIGH;
-                case UserHabitManager::LearningIntensity::MEDIUM:
-                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_MEDIUM;
-                case UserHabitManager::LearningIntensity::LOW:
-                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_LOW;
-                default:
-                    return SCREEN_OFF_SLEEP_INTERVAL;
-            }
-        }
-        
-        return SCREEN_OFF_SLEEP_INTERVAL;
-    }
-
-private:
-    const UserHabits& habits_;
-    const UserHabitManager& habit_manager_;
-    
-    // 常规阶段间隔
-    static constexpr auto SCREEN_CHECK_INTERVAL_MIN = std::chrono::seconds(30);
-    static constexpr auto SCREEN_CHECK_INTERVAL_MAX = std::chrono::minutes(5);
-    static constexpr auto PROCESS_CHECK_INTERVAL_MIN = std::chrono::seconds(45);
-    static constexpr auto PROCESS_CHECK_INTERVAL_MAX = std::chrono::minutes(3);
-    static constexpr auto PROCESS_CHECK_INTERVAL_DEFAULT = std::chrono::minutes(1);
-    static constexpr auto KILL_INTERVAL_MIN = std::chrono::minutes(5);
-    static constexpr auto KILL_INTERVAL_MAX = std::chrono::minutes(30);
-    static constexpr auto KILL_INTERVAL_DEFAULT = std::chrono::minutes(10);
-    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL = std::chrono::minutes(1);
-    
-    // 学习阶段间隔
-    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_HIGH = std::chrono::seconds(15);
-    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(30);
-    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_LOW = std::chrono::seconds(45);
-    
-    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_HIGH = std::chrono::seconds(20);
-    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(30);
-    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_LOW = std::chrono::seconds(40);
-    
-    static constexpr auto KILL_INTERVAL_LEARNING_HIGH = std::chrono::minutes(3);
-    static constexpr auto KILL_INTERVAL_LEARNING_MEDIUM = std::chrono::minutes(5);
-    static constexpr auto KILL_INTERVAL_LEARNING_LOW = std::chrono::minutes(7);
-    static constexpr auto KILL_INTERVAL_IMPORTANT_APP = std::chrono::minutes(15);
-    
-    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_HIGH = std::chrono::seconds(30);
-    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(40);
-    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_LOW = std::chrono::seconds(50);
-};
-
 class UserHabitManager {
 public:
     UserHabitManager() { 
@@ -1046,6 +771,279 @@ private:
         pclose(pipe);
         return result;
     }
+};
+struct UserHabits {
+    std::map<std::string, AppStats> app_stats;
+    int screen_on_duration_avg{ 0 };
+    int app_switch_frequency{ 0 };
+    int habit_samples{ 0 };
+    std::chrono::system_clock::time_point last_update;
+    std::chrono::system_clock::time_point last_save;
+    std::chrono::system_clock::time_point last_full_save;
+    double learning_weight{ 0.7 };
+    std::array<TimePattern, 24> daily_patterns;
+    int learning_hours{ 0 };
+    bool learning_complete{ false };
+    std::map<std::string, AppStats> modified_stats; // 用于增量保存的修改记录
+    int save_version{ 0 }; // 保存版本号，用于检测文件变化
+    bool needs_full_save{ false }; // 标记是否需要完整保存
+
+    static constexpr int LEARNING_HOURS_TARGET = 72;
+    static constexpr int SAVE_INTERVAL_MINUTES = 30; // 每30分钟保存一次
+    static constexpr int FULL_SAVE_INTERVAL_HOURS = 12; // 每12小时完整保存一次
+
+    void updateTimePattern(int hour, double activity, int freq, const std::vector<std::string>& active_apps) {
+        daily_patterns[hour].hour = hour;
+        daily_patterns[hour].update(activity, freq, active_apps);
+    }
+
+    void updateLearningProgress() {
+        if (learning_complete) return;
+        
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_update);
+        learning_hours += duration.count();
+        last_update = now;
+        
+        // 随着学习时间增加，学习权重逐渐降低
+        learning_weight = std::max(0.0, 0.7 - (static_cast<double>(learning_hours) / LEARNING_HOURS_TARGET * 0.7));
+        
+        if (learning_hours >= LEARNING_HOURS_TARGET) {
+            learning_complete = true;
+            learning_weight = 0.0;
+            needs_full_save = true;
+        }
+    }
+    
+    bool shouldSaveNow() const {
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - last_save);
+        return duration.count() >= SAVE_INTERVAL_MINUTES;
+    }
+    
+    bool shouldFullSaveNow() const {
+        auto now = std::chrono::system_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::hours>(now - last_full_save);
+        return duration.count() >= FULL_SAVE_INTERVAL_HOURS || needs_full_save;
+    }
+    
+    void updateLastSaveTime() {
+        last_save = std::chrono::system_clock::now();
+    }
+    
+    void updateLastFullSaveTime() {
+        last_full_save = std::chrono::system_clock::now();
+        last_save = last_full_save;
+        needs_full_save = false;
+    }
+    
+    void markAppModified(const std::string& package_name) {
+        auto it = app_stats.find(package_name);
+        if (it != app_stats.end()) {
+            modified_stats[package_name] = it->second;
+        }
+    }
+    
+    void clearModifiedApps() {
+        modified_stats.clear();
+    }
+};
+
+class IntervalManager {
+public:
+    IntervalManager(const UserHabits& habits, const UserHabitManager& habit_manager) 
+        : habits_(habits), habit_manager_(habit_manager) {}
+
+    std::chrono::seconds getScreenCheckInterval() const {
+        // 根据学习阶段调整检查间隔
+        auto intensity = habit_manager_.getLearningIntensity();
+        
+        // 根据当前时间段的活动水平调整屏幕检查间隔
+        int current_hour = getCurrentHour();
+        const auto& pattern = habits_.daily_patterns[current_hour];
+        
+        // 基于学习阶段设置基础间隔
+        std::chrono::seconds base_interval;
+        switch (intensity) {
+            case UserHabitManager::LearningIntensity::HIGH:
+                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_HIGH;
+                break;
+            case UserHabitManager::LearningIntensity::MEDIUM:
+                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_MEDIUM;
+                break;
+            case UserHabitManager::LearningIntensity::LOW:
+                base_interval = SCREEN_CHECK_INTERVAL_LEARNING_LOW;
+                break;
+            case UserHabitManager::LearningIntensity::STABLE:
+                // 学习完成后，根据当前时段活动水平动态调整
+                double activity_factor = std::min(1.0, pattern.activity_level);
+                auto dynamic_interval = static_cast<int>(
+                    SCREEN_CHECK_INTERVAL_MAX.count() - 
+                    (SCREEN_CHECK_INTERVAL_MAX - SCREEN_CHECK_INTERVAL_MIN).count() * activity_factor
+                );
+                return std::chrono::seconds(dynamic_interval);
+        }
+        
+        // 在学习阶段，适当考虑时间模式，但以学习强度为主
+        double activity_factor = std::min(0.5, pattern.activity_level / 2);
+        auto adjusted_interval = static_cast<int>(
+            base_interval.count() * (1.0 - activity_factor)
+        );
+        
+        return std::chrono::seconds(adjusted_interval);
+    }
+
+    std::chrono::seconds getProcessCheckInterval(const std::string& package_name) const {
+        auto intensity = habit_manager_.getLearningIntensity();
+        
+        // 学习阶段使用更短的固定间隔
+        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
+            switch (intensity) {
+                case UserHabitManager::LearningIntensity::HIGH:
+                    return PROCESS_CHECK_INTERVAL_LEARNING_HIGH;
+                case UserHabitManager::LearningIntensity::MEDIUM:
+                    return PROCESS_CHECK_INTERVAL_LEARNING_MEDIUM;
+                case UserHabitManager::LearningIntensity::LOW:
+                    return PROCESS_CHECK_INTERVAL_LEARNING_LOW;
+                default:
+                    return PROCESS_CHECK_INTERVAL_DEFAULT;
+            }
+        }
+        
+        // 稳定阶段，基于学习到的用户习惯调整
+        auto it = habits_.app_stats.find(package_name);
+        if (it == habits_.app_stats.end()) {
+            return PROCESS_CHECK_INTERVAL_DEFAULT;
+        }
+        
+        // 考虑应用重要性和当前时段
+        double importance = it->second.importance_weight;
+        int current_hour = getCurrentHour();
+        const auto& pattern = habits_.daily_patterns[current_hour];
+        
+        // 检查应用是否在当前时段活跃
+        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
+                                         pattern.active_apps.end(), 
+                                         package_name) != pattern.active_apps.end();
+        
+        // 活跃应用在其活跃时段检查更频繁
+        double time_factor = is_active_in_hour ? 0.7 : 1.0;
+        
+        auto interval = static_cast<long long>(
+            PROCESS_CHECK_INTERVAL_MAX.count() -
+            (PROCESS_CHECK_INTERVAL_MAX - PROCESS_CHECK_INTERVAL_MIN).count() * 
+            (importance / 100.0) * time_factor
+        );
+        
+        interval = std::max(interval, static_cast<long long>(PROCESS_CHECK_INTERVAL_MIN.count()));
+        return std::chrono::seconds(interval);
+    }
+
+    std::chrono::seconds getKillInterval(const std::string& package_name) const {
+        auto intensity = habit_manager_.getLearningIntensity();
+        
+        // 学习阶段使用更短的固定间隔，但不会太短以避免误杀常用应用
+        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
+            // 即使在学习阶段，也要考虑应用重要性
+            auto it = habits_.app_stats.find(package_name);
+            if (it != habits_.app_stats.end() && it->second.importance_weight > 50.0) {
+                // 重要应用即使在学习阶段也应该有更长的存活时间
+                return KILL_INTERVAL_IMPORTANT_APP;
+            }
+            
+            switch (intensity) {
+                case UserHabitManager::LearningIntensity::HIGH:
+                    return KILL_INTERVAL_LEARNING_HIGH;
+                case UserHabitManager::LearningIntensity::MEDIUM:
+                    return KILL_INTERVAL_LEARNING_MEDIUM;
+                case UserHabitManager::LearningIntensity::LOW:
+                    return KILL_INTERVAL_LEARNING_LOW;
+                default:
+                    return KILL_INTERVAL_DEFAULT;
+            }
+        }
+        
+        // 稳定阶段，基于学习到的用户习惯调整
+        auto it = habits_.app_stats.find(package_name);
+        if (it == habits_.app_stats.end()) {
+            return KILL_INTERVAL_DEFAULT;
+        }
+        
+        // 重要应用有更长的后台存活时间
+        double importance = it->second.importance_weight;
+        int current_hour = getCurrentHour();
+        
+        // 检查应用是否在当前时段活跃
+        const auto& pattern = habits_.daily_patterns[current_hour];
+        bool is_active_in_hour = std::find(pattern.active_apps.begin(), 
+                                         pattern.active_apps.end(), 
+                                         package_name) != pattern.active_apps.end();
+        
+        // 在活跃时段，即使在后台也给予更长的存活时间
+        double time_factor = is_active_in_hour ? 1.3 : 1.0;
+        
+        auto interval = static_cast<long long>(
+            KILL_INTERVAL_MIN.count() +
+            (KILL_INTERVAL_MAX - KILL_INTERVAL_MIN).count() * 
+            (importance / 100.0) * time_factor
+        );
+        
+        interval = std::min(interval, static_cast<long long>(KILL_INTERVAL_MAX.count()));
+        return std::chrono::seconds(interval);
+    }
+
+    std::chrono::seconds getScreenOffSleepInterval() const {
+        auto intensity = habit_manager_.getLearningIntensity();
+        
+        // 学习阶段使用更短的休眠间隔
+        if (intensity != UserHabitManager::LearningIntensity::STABLE) {
+            switch (intensity) {
+                case UserHabitManager::LearningIntensity::HIGH:
+                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_HIGH;
+                case UserHabitManager::LearningIntensity::MEDIUM:
+                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_MEDIUM;
+                case UserHabitManager::LearningIntensity::LOW:
+                    return SCREEN_OFF_SLEEP_INTERVAL_LEARNING_LOW;
+                default:
+                    return SCREEN_OFF_SLEEP_INTERVAL;
+            }
+        }
+        
+        return SCREEN_OFF_SLEEP_INTERVAL;
+    }
+
+private:
+    const UserHabits& habits_;
+    const UserHabitManager& habit_manager_;
+    
+    // 常规阶段间隔
+    static constexpr auto SCREEN_CHECK_INTERVAL_MIN = std::chrono::seconds(30);
+    static constexpr auto SCREEN_CHECK_INTERVAL_MAX = std::chrono::minutes(5);
+    static constexpr auto PROCESS_CHECK_INTERVAL_MIN = std::chrono::seconds(45);
+    static constexpr auto PROCESS_CHECK_INTERVAL_MAX = std::chrono::minutes(3);
+    static constexpr auto PROCESS_CHECK_INTERVAL_DEFAULT = std::chrono::minutes(1);
+    static constexpr auto KILL_INTERVAL_MIN = std::chrono::minutes(5);
+    static constexpr auto KILL_INTERVAL_MAX = std::chrono::minutes(30);
+    static constexpr auto KILL_INTERVAL_DEFAULT = std::chrono::minutes(10);
+    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL = std::chrono::minutes(1);
+    
+    // 学习阶段间隔
+    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_HIGH = std::chrono::seconds(15);
+    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(30);
+    static constexpr auto SCREEN_CHECK_INTERVAL_LEARNING_LOW = std::chrono::seconds(45);
+    
+    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_HIGH = std::chrono::seconds(20);
+    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(30);
+    static constexpr auto PROCESS_CHECK_INTERVAL_LEARNING_LOW = std::chrono::seconds(40);
+    
+    static constexpr auto KILL_INTERVAL_LEARNING_HIGH = std::chrono::minutes(3);
+    static constexpr auto KILL_INTERVAL_LEARNING_MEDIUM = std::chrono::minutes(5);
+    static constexpr auto KILL_INTERVAL_LEARNING_LOW = std::chrono::minutes(7);
+    static constexpr auto KILL_INTERVAL_IMPORTANT_APP = std::chrono::minutes(15);
+    
+    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_HIGH = std::chrono::seconds(30);
+    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_MEDIUM = std::chrono::seconds(40);
+    static constexpr auto SCREEN_OFF_SLEEP_INTERVAL_LEARNING_LOW = std::chrono::seconds(50);
 };
 
 class ProcessManager {
