@@ -1,0 +1,449 @@
+/**
+ * AMMF WebUI 抑制管理器页面样式
+ * 基于MD3设计系统规范
+ */
+
+/* 抑制管理器容器 */
+.suppress-manager-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--spacing-s);
+}
+
+/* 配置应用列表 */
+.configured-apps-section {
+    margin-bottom: var(--spacing-xl);
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-m);
+}
+
+.section-header h3 {
+    font: var(--headline-s);
+    margin: 0;
+    color: var(--on-surface);
+}
+
+.app-count {
+    background-color: var(--primary-container);
+    color: var(--on-primary-container);
+    font: var(--label-m);
+    padding: 2px 8px;
+    border-radius: 12px;
+    min-width: 24px;
+    text-align: center;
+}
+
+/* 应用卡片样式 */
+.app-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--spacing-m);
+}
+
+.app-card {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-m);
+    border-radius: var(--border-radius-l);
+    background-color: var(--surface-container);
+    transition: background-color var(--tra), transform var(--tra);
+    position: relative;
+    overflow: hidden;
+}
+
+.app-card:hover {
+    background-color: var(--surface-container-high);
+    transform: translateY(-2px);
+}
+
+.app-card.disabled {
+    opacity: 0.7;
+}
+
+.app-icon, .app-icon-placeholder {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--border-radius-s);
+    margin-right: var(--spacing-m);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--surface-container-high);
+    overflow: hidden;
+}
+
+.app-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.app-icon-placeholder .material-symbols-rounded {
+    font-size: 28px;
+    color: var(--on-surface-variant);
+}
+
+.app-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-name {
+    font: var(--title-m);
+    color: var(--on-surface);
+    margin: 0 0 var(--spacing-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.package-name {
+    font: var(--body-s);
+    color: var(--on-surface-variant);
+    margin: 0 0 var(--spacing-xs);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.process-count {
+    font: var(--label-s);
+    color: var(--primary);
+}
+
+.app-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-s);
+    margin-left: var(--spacing-m);
+}
+
+/* 开关样式 */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-switch span {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--surface-container-highest);
+    border: 1px solid var(--outline);
+    transition: var(--tra);
+    border-radius: 20px;
+}
+
+.toggle-switch span:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+    background-color: var(--outline);
+    transition: var(--tra);
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + span {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.toggle-switch input:checked + span:before {
+    transform: translateX(16px);
+    background-color: var(--on-primary);
+}
+
+/* MD3 图标按钮 */
+.md3-icon-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: transparent;
+    color: var(--on-surface-variant);
+    border: none;
+    cursor: pointer;
+    transition: background-color var(--tra);
+}
+
+.md3-icon-button:hover {
+    background-color: color-mix(in oklch, var(--on-surface-variant) 8%, transparent);
+}
+
+.md3-icon-button:active,
+.md3-icon-button:focus {
+    background-color: color-mix(in oklch, var(--on-surface-variant) 10%, transparent);
+}
+
+/* 浮动操作按钮 */
+.md3-fab {
+    position: fixed;
+    right: 24px;
+    bottom: calc(var(--nav-height) + 24px);
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    background-color: var(--primary);
+    color: var(--on-primary);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--ele3);
+    cursor: pointer;
+    transition: transform var(--tra), background-color var(--tra);
+    z-index: 5;
+}
+
+.md3-fab:hover {
+    background-color: color-mix(in oklch, var(--primary) 90%, black);
+    transform: translateY(-2px);
+}
+
+.md3-fab:active {
+    transform: translateY(0);
+}
+
+.md3-fab .material-symbols-rounded {
+    font-size: 24px;
+}
+
+/* 对话框样式 */
+.md3-dialog {
+    border-radius: 28px;
+    border: none;
+    padding: 0;
+    min-width: 280px;
+    max-width: 560px;
+    max-height: 80vh;
+    overflow: hidden;
+}
+
+.md3-dialog-content {
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.md3-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-l);
+    border-bottom: 1px solid var(--outline-variant);
+}
+
+.md3-dialog-header h3 {
+    font: var(--headline-s);
+    margin: 0;
+    color: var(--on-surface);
+}
+
+.md3-dialog-body {
+    padding: var(--spacing-l) var(--spacing-xl);
+    overflow-y: auto;
+    flex: 1;
+}
+
+.md3-dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-s);
+    padding: var(--spacing-l) var(--spacing-xl);
+    border-top: 1px solid var(--outline-variant);
+    background-color: var(--surface-container-high);
+}
+
+/* 搜索容器 */
+.search-container {
+    margin-bottom: var(--spacing-l);
+}
+
+.md3-search-field {
+    display: flex;
+    align-items: center;
+    background-color: var(--surface-container-high);
+    border-radius: var(--border-radius-xl);
+    padding: 0 var(--spacing-m);
+    margin-bottom: var(--spacing-m);
+}
+
+.md3-search-field .material-symbols-rounded {
+    color: var(--on-surface-variant);
+    margin-right: var(--spacing-s);
+}
+
+.md3-search-field input {
+    flex: 1;
+    height: 40px;
+    border: none;
+    background: transparent;
+    color: var(--on-surface);
+    font: var(--body-l);
+    outline: none;
+}
+
+.md3-search-field input::placeholder {
+    color: var(--on-surface-variant);
+}
+
+.filter-options {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--spacing-m);
+}
+
+.md3-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.md3-checkbox input {
+    margin-right: var(--spacing-s);
+}
+
+/* 进程配置样式 */
+.process-list-container {
+    margin-top: var(--spacing-l);
+}
+
+.process-list-header {
+    margin-bottom: var(--spacing-m);
+}
+
+.process-list-header h4 {
+    font: var(--title-m);
+    margin: 0;
+    color: var(--on-surface);
+}
+
+.process-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-m);
+}
+
+.process-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-s);
+}
+
+.md3-input-field {
+    flex: 1;
+    position: relative;
+}
+
+.md3-input-field input {
+    width: 100%;
+    height: 40px;
+    padding: 0 var(--spacing-m);
+    border: 1px solid var(--outline);
+    border-radius: var(--border-radius-s);
+    background-color: var(--surface);
+    color: var(--on-surface);
+    font: var(--body-l);
+    outline: none;
+    transition: border-color var(--tra);
+}
+
+.md3-input-field input:focus {
+    border-color: var(--primary);
+}
+
+.process-actions {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: var(--spacing-m);
+}
+
+.md3-button {
+    height: 40px;
+    padding: 0 var(--spacing-xl);
+    border-radius: 20px;
+    border: none;
+    font: var(--label-l);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-s);
+    transition: background-color var(--tra);
+}
+
+.md3-button:not(.filled) {
+    background-color: transparent;
+    color: var(--primary);
+}
+
+.md3-button:not(.filled):hover {
+    background-color: color-mix(in oklch, var(--primary) 8%, transparent);
+}
+
+.md3-button.filled {
+    background-color: var(--primary);
+    color: var(--on-primary);
+}
+
+.md3-button.filled:hover {
+    background-color: color-mix(in oklch, var(--primary) 92%, black);
+}
+
+/* 空状态样式 */
+.empty-state {
+    padding: var(--spacing-xl);
+    text-align: center;
+    color: var(--on-surface-variant);
+    font: var(--body-m);
+    background-color: var(--surface-container);
+    border-radius: var(--border-radius-l);
+}
+
+/* 应用信息头部 */
+.app-info-header {
+    margin-bottom: var(--spacing-l);
+    padding-bottom: var(--spacing-m);
+    border-bottom: 1px solid var(--outline-variant);
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+    .app-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .md3-dialog {
+        width: 90%;
+        max-width: none;
+    }
+}
+
+@media (min-width: 1024px) {
+    .md3-fab {
+        right: 48px;
+        bottom: 48px;
+    }
+} 
