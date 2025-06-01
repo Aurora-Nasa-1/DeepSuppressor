@@ -194,8 +194,22 @@
     transform: translateX(16px);
     background-color: var(--on-primary);
 }
+/* 对话框样式 */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
 /* 浮动操作按钮 */
-  .fab-button {
+.fab-button {
     position: fixed;
     right: 24px;
     bottom: 24px;
@@ -210,7 +224,7 @@
     justify-content: center;
     cursor: pointer;
     transition: transform var(--tra), background-color var(--tra);
-    z-index: 5;
+    z-index: 1500;
 }
 
 .fab-button:hover {
@@ -321,20 +335,6 @@
     }
 
 }
-/* 对话框样式 */
-.dialog-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-}
-
 .dialog {
     background-color: var(--surface-container);
     border-radius: var(--border-radius-l);

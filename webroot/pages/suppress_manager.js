@@ -14,7 +14,7 @@ const SuppressManagerPage = {
     
     // 配置项
     config: {
-        configPath: `${Core.MODULE_PATH}module_settings/config.sh`
+        configPath: `${Core.MODULE_PATH}module_settings/suppress_config.json`
     },
     
     // 预加载数据
@@ -340,7 +340,6 @@ const SuppressManagerPage = {
     render() {
         return `
             <div class="suppress-manager-container">
-                <h2>${I18n.translate('SUPPRESS_MANAGER', '抑制管理器')}</h2>
                 
                 <!-- 已配置应用列表 -->
                 <div class="configured-apps-section">
@@ -630,10 +629,11 @@ const SuppressManagerPage = {
             newProcessItem.dataset.index = newIndex;
             
             newProcessItem.innerHTML = `
-                <div class="md3-input-field">
-                    <input type="text" class="process-input" value="${this.selectedApp}:">
-                </div>
-                <button class="md3-icon-button remove-process">
+                <label>
+                    <span>"Process"</span>
+                    <input type="text" id="process-input" value="${this.selectedApp}:">
+                </label>
+                <button class="icon-button remove-process">
                     <span class="material-symbols-rounded">delete</span>
                 </button>
             `;
