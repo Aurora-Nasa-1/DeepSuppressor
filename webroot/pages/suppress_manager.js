@@ -14,14 +14,16 @@ const SuppressManagerPage = {
     
     // 配置项
     config: {
-        configPath: 'module_settings/suppress_config.json'
+        configPath: `${Core.MODULE_PATH}module_settings/config.sh`
     },
     
     // 预加载数据
     async preloadData() {
         try {
-            // 只预加载配置数据，应用列表按需加载
+            // 预加载配置数据和应用列表
             const configData = await this.loadConfig();
+            // 开始加载应用列表，但不等待完成
+            this.loadInstalledApps();
             return { configData };
         } catch (error) {
             console.error('预加载抑制管理器数据失败:', error);
@@ -132,9 +134,15 @@ const SuppressManagerPage = {
     // 获取应用信息
     async getAppInfo(packageName) {
         try {
-            const appLabelCmd = await Core.execCommand(`dumpsys package ${packageName} | grep applicationInfo`);
-            const labelMatch = appLabelCmd.match(/labelRes=\d+\s+nonLocalizedLabel=([^\s]+)/);
-            const appName = labelMatch ? labelMatch[1] : packageName.split('.').pop();
+            // 改进应用名称获取方法
+            const appLabelCmd = await Core.execCommand(`dumpsys package ${packageName} | grep -E "labelRes=|nonLocalizedLabel="`);
+            let appName = packageName.split('.').pop();
+            
+            // 尝试从nonLocalizedLabel获取名称
+            const nonLocalizedMatch = appLabelCmd.match(/nonLocalizedLabel=([^\s]+)/i);
+            if (nonLocalizedMatch && nonLocalizedMatch[1]) {
+                appName = nonLocalizedMatch[1];
+            }
             
             return {
                 packageName,
@@ -176,9 +184,6 @@ const SuppressManagerPage = {
                 
                 // 写入新配置
                 await Core.execCommand(`echo '${configJson.replace(/'/g, "'\\''")}' > ${this.config.configPath}`);
-                
-                // 重启服务以应用配置
-                await Core.execCommand('sh ${Core.MODULE_PATH}/service.sh restart');
             } catch (error) {
                 console.error('保存配置文件失败:', error);
                 Core.showToast(I18n.translate('CONFIG_SAVE_ERROR', '保存配置失败'), 'error');
@@ -372,9 +377,10 @@ const SuppressManagerPage = {
                     </div>
                     <div class="dialog-content">
                         <div class="search-container">
-                            <div class=input-field">
-                                <input type="text" id="app-search" placeholder="${I18n.translate('SEARCH_APPS', '搜索应用')}">
-                            </div>
+                            <label>
+                                <span>"${I18n.translate('SEARCH_APPS', '搜索应用')}"</span>
+                                <input type="text" id="app-search">
+                            </label>
                             <button class="button" id="load-apps-btn">
                                 ${I18n.translate('LOAD_APP_LIST', '加载应用列表')}
                             </button>
@@ -523,7 +529,7 @@ const SuppressManagerPage = {
                     <div class="md3-input-field">
                         <input type="text" class="process-input" value="${this.escapeHtml(processes[i])}">
                     </div>
-                    <button class="md3-icon-button remove-process">
+                    <button class="icon-button remove-process">
                         <span class="material-symbols-rounded">delete</span>
                     </button>
                 </div>
@@ -539,8 +545,8 @@ const SuppressManagerPage = {
         if (dialog) {
             dialog.style.display = 'flex';
             
-            // 如果应用列表为空且未在加载中，自动加载应用列表
-            if (!this.isLoadingApps && (!this.installedApps || this.installedApps.length === 0)) {
+            // 如果应用列表为空，自动加载应用列表
+            if (!this.installedApps || this.installedApps.length === 0) {
                 this.loadInstalledApps();
             }
             
