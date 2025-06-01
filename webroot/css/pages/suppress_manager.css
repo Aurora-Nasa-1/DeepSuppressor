@@ -8,6 +8,24 @@
     max-width: 1200px;
     margin: 0 auto;
     padding: var(--spacing-s);
+    position: relative;
+    min-height: 300px;
+}
+
+.filter-options {
+    display: flex;
+    align-items: center;
+}
+
+.md3-checkbox {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.md3-checkbox input {
+    margin-right: var(--spacing-s);
 }
 
 /* 配置应用列表 */
@@ -61,6 +79,10 @@
     transform: translateY(-2px);
 }
 
+.app-card.system-app {
+    background-color: var(--surface-container-low);
+}
+
 .app-card.disabled {
     opacity: 0.7;
 }
@@ -112,7 +134,7 @@
     text-overflow: ellipsis;
 }
 
-.process-count {
+.process-count, .app-version {
     font: var(--label-s);
     color: var(--primary);
 }
@@ -197,6 +219,11 @@
     background-color: color-mix(in oklch, var(--on-surface-variant) 10%, transparent);
 }
 
+.md3-icon-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
 /* 浮动操作按钮 */
 .md3-fab {
     position: fixed;
@@ -241,6 +268,10 @@
     overflow: hidden;
 }
 
+.md3-dialog::backdrop {
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
 .md3-dialog-content {
     display: flex;
     flex-direction: column;
@@ -274,55 +305,6 @@
     padding: var(--spacing-l) var(--spacing-xl);
     border-top: 1px solid var(--outline-variant);
     background-color: var(--surface-container-high);
-}
-
-/* 搜索容器 */
-.search-container {
-    margin-bottom: var(--spacing-l);
-}
-
-.md3-search-field {
-    display: flex;
-    align-items: center;
-    background-color: var(--surface-container-high);
-    border-radius: var(--border-radius-xl);
-    padding: 0 var(--spacing-m);
-    margin-bottom: var(--spacing-m);
-}
-
-.md3-search-field .material-symbols-rounded {
-    color: var(--on-surface-variant);
-    margin-right: var(--spacing-s);
-}
-
-.md3-search-field input {
-    flex: 1;
-    height: 40px;
-    border: none;
-    background: transparent;
-    color: var(--on-surface);
-    font: var(--body-l);
-    outline: none;
-}
-
-.md3-search-field input::placeholder {
-    color: var(--on-surface-variant);
-}
-
-.filter-options {
-    display: flex;
-    align-items: center;
-    margin-bottom: var(--spacing-m);
-}
-
-.md3-checkbox {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-}
-
-.md3-checkbox input {
-    margin-right: var(--spacing-s);
 }
 
 /* 进程配置样式 */
@@ -412,6 +394,11 @@
     background-color: color-mix(in oklch, var(--primary) 92%, black);
 }
 
+.md3-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
 /* 空状态样式 */
 .empty-state {
     padding: var(--spacing-xl);
@@ -420,6 +407,15 @@
     font: var(--body-m);
     background-color: var(--surface-container);
     border-radius: var(--border-radius-l);
+    grid-column: 1 / -1;
+}
+
+/* 加载占位符 */
+.loading-placeholder {
+    padding: var(--spacing-m);
+    text-align: center;
+    color: var(--on-surface-variant);
+    font: var(--body-m);
 }
 
 /* 应用信息头部 */
@@ -429,15 +425,69 @@
     border-bottom: 1px solid var(--outline-variant);
 }
 
+/* 加载遮罩 */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 4px solid var(--primary-container);
+    border-top-color: var(--primary);
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 /* 响应式布局 */
 @media (max-width: 768px) {
     .app-list {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
     
     .md3-dialog {
         width: 90%;
         max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-list {
+        grid-template-columns: 1fr;
+    }
+    
+    .app-actions {
+        flex-direction: column;
+    }
+    
+    .search-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .md3-search-field {
+        width: 100%;
+    }
+    
+    .md3-fab {
+        right: 16px;
+        bottom: calc(var(--nav-height) + 16px);
     }
 }
 
