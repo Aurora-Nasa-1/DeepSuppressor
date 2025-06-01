@@ -1223,6 +1223,7 @@ private:
                 return;
                 } catch (const std::exception& e) {
                 Logger::log(Logger::Level::INFO, std::format("killkiss.....", process_name));
+            }
         }
         stats.total_processes_killed++;
         stats.killed_count_by_package[package_name]++;
