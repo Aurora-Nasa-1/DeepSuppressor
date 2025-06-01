@@ -17,14 +17,14 @@
     align-items: center;
 }
 
-.md3-checkbox {
+  checkbox {
     display: flex;
     align-items: center;
     cursor: pointer;
     user-select: none;
 }
 
-.md3-checkbox input {
+  checkbox input {
     margin-right: var(--spacing-s);
 }
 
@@ -194,41 +194,11 @@
     transform: translateX(16px);
     background-color: var(--on-primary);
 }
-
-/* MD3 图标按钮 */
-.md3-icon-button {
-    width: 40px;
-    height: 40px;
-    border-radius: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-color: transparent;
-    color: var(--on-surface-variant);
-    border: none;
-    cursor: pointer;
-    transition: background-color var(--tra);
-}
-
-.md3-icon-button:hover {
-    background-color: color-mix(in oklch, var(--on-surface-variant) 8%, transparent);
-}
-
-.md3-icon-button:active,
-.md3-icon-button:focus {
-    background-color: color-mix(in oklch, var(--on-surface-variant) 10%, transparent);
-}
-
-.md3-icon-button:disabled {
-    opacity: 0.4;
-    cursor: default;
-}
-
 /* 浮动操作按钮 */
-.md3-fab {
+  .fab-button {
     position: fixed;
     right: 24px;
-    bottom: calc(var(--nav-height) + 24px);
+    bottom: 24px;
     width: 56px;
     height: 56px;
     border-radius: 16px;
@@ -238,73 +208,22 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: var(--ele3);
     cursor: pointer;
     transition: transform var(--tra), background-color var(--tra);
     z-index: 5;
 }
 
-.md3-fab:hover {
+.fab-button:hover {
     background-color: color-mix(in oklch, var(--primary) 90%, black);
     transform: translateY(-2px);
 }
 
-.md3-fab:active {
+.fab-button:active {
     transform: translateY(0);
 }
 
-.md3-fab .material-symbols-rounded {
+  .fab-button.material-symbols-rounded {
     font-size: 24px;
-}
-
-/* 对话框样式 */
-.md3-dialog {
-    border-radius: 28px;
-    border: none;
-    padding: 0;
-    min-width: 280px;
-    max-width: 560px;
-    max-height: 80vh;
-    overflow: hidden;
-}
-
-.md3-dialog::backdrop {
-    background-color: rgba(0, 0, 0, 0.4);
-}
-
-.md3-dialog-content {
-    display: flex;
-    flex-direction: column;
-    max-height: 80vh;
-}
-
-.md3-dialog-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-l);
-    border-bottom: 1px solid var(--outline-variant);
-}
-
-.md3-dialog-header h3 {
-    font: var(--headline-s);
-    margin: 0;
-    color: var(--on-surface);
-}
-
-.md3-dialog-body {
-    padding: var(--spacing-l) var(--spacing-xl);
-    overflow-y: auto;
-    flex: 1;
-}
-
-.md3-dialog-footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--spacing-s);
-    padding: var(--spacing-l) var(--spacing-xl);
-    border-top: 1px solid var(--outline-variant);
-    background-color: var(--surface-container-high);
 }
 
 /* 进程配置样式 */
@@ -332,82 +251,6 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-s);
-}
-
-.md3-input-field {
-    flex: 1;
-    position: relative;
-}
-
-.md3-input-field input {
-    width: 100%;
-    height: 40px;
-    padding: 0 var(--spacing-m);
-    border: 1px solid var(--outline);
-    border-radius: var(--border-radius-s);
-    background-color: var(--surface);
-    color: var(--on-surface);
-    font: var(--body-l);
-    outline: none;
-    transition: border-color var(--tra);
-}
-
-.md3-input-field input:focus {
-    border-color: var(--primary);
-}
-
-.process-actions {
-    display: flex;
-    justify-content: flex-start;
-    margin-top: var(--spacing-m);
-}
-
-.md3-button {
-    height: 40px;
-    padding: 0 var(--spacing-xl);
-    border-radius: 20px;
-    border: none;
-    font: var(--label-l);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--spacing-s);
-    transition: background-color var(--tra);
-}
-
-.md3-button:not(.filled) {
-    background-color: transparent;
-    color: var(--primary);
-}
-
-.md3-button:not(.filled):hover {
-    background-color: color-mix(in oklch, var(--primary) 8%, transparent);
-}
-
-.md3-button.filled {
-    background-color: var(--primary);
-    color: var(--on-primary);
-}
-
-.md3-button.filled:hover {
-    background-color: color-mix(in oklch, var(--primary) 92%, black);
-}
-
-.md3-button:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
-/* 空状态样式 */
-.empty-state {
-    padding: var(--spacing-xl);
-    text-align: center;
-    color: var(--on-surface-variant);
-    font: var(--body-m);
-    background-color: var(--surface-container);
-    border-radius: var(--border-radius-l);
-    grid-column: 1 / -1;
 }
 
 /* 加载占位符 */
@@ -460,11 +303,7 @@
     .app-list {
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
-    
-    .md3-dialog {
-        width: 90%;
-        max-width: none;
-    }
+
 }
 
 @media (max-width: 480px) {
@@ -480,20 +319,40 @@
         flex-direction: column;
         align-items: stretch;
     }
-    
-    .md3-search-field {
-        width: 100%;
-    }
-    
-    .md3-fab {
-        right: 16px;
-        bottom: calc(var(--nav-height) + 16px);
-    }
+
+}
+/* 新增对话框样式 */
+.suppress-dialog {
+    max-width: 600px;
+    border-radius: var(--border-radius-l);
+    padding: var(--spacing-m);
+    background-color: var(--surface-container);
 }
 
-@media (min-width: 1024px) {
-    .md3-fab {
-        right: 48px;
-        bottom: 48px;
-    }
-} 
+.suppress-dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-m);
+}
+
+.suppress-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-s);
+    margin-top: var(--spacing-m);
+}
+
+/* 新增进程列表样式 */
+.process-list-item {
+    display: flex;
+    align-items: center;
+    padding: var(--spacing-s);
+    border-radius: var(--border-radius-s);
+    background-color: var(--surface-container-low);
+    margin-bottom: var(--spacing-xs);
+}
+
+.process-list-item:hover {
+    background-color: var(--surface-container-high);
+}
