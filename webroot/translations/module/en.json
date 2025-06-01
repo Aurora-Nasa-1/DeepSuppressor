@@ -21,5 +21,6 @@
   "CONFIG_REFRESH_ERROR": "Failed to refresh configuration",
   "CANCEL": "Cancel",
   "SAVE": "Save",
-  "REFRESH": "Refresh"
+  "REFRESH": "Refresh",
+  "NAV_DEEP_SUPPRESSOR_SETTINGS": "SuppressSettings"
 } 

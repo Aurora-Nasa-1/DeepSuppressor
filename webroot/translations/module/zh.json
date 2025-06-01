@@ -21,5 +21,6 @@
   "CONFIG_REFRESH_ERROR": "刷新配置失败",
   "CANCEL": "取消",
   "SAVE": "保存",
-  "REFRESH": "刷新"
+  "REFRESH": "刷新",
+  "NAV_DEEP_SUPPRESSOR_SETTINGS": "压制设置"
 } 
