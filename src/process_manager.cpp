@@ -1221,18 +1221,8 @@ private:
                 stats.total_processes_killed++;
                 stats.killed_count_by_package[package_name]++;
                 return;
-            } catch (const std::exception& e) {
-                // PID解析失败，回退到杀死整个应用包
-                Logger::log(Logger::Level::WARN, std::format("Failed to parse PID for process {}, falling back to package kill", process_name));
             }
         }
-        
-        // 如果无法获取PID或解析失败，回退到杀死整个应用包
-        std::string cmd = "am force-stop " + package_name;
-        system(cmd.c_str());
-        
-        // 记录操作
-        Logger::log(Logger::Level::INFO, std::format("Killed entire package: {}", package_name));
         stats.total_processes_killed++;
         stats.killed_count_by_package[package_name]++;
     }
