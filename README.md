@@ -22,24 +22,16 @@
 
 ### 详细配置教程
 1. **编辑配置文件**
-   打开 `module_settings/config.sh` 文件，按照以下格式添加配置：
+   打开 `module_settings/suppress_config.json` 文件，按照以下格式添加配置：
    ```
-   # 启用对某应用的压制
-   suppress_APP_包名=true
-   
-   # 添加要压制的进程（将包名中的点替换为下划线）
-   suppress_config_包名_1="进程名1"
-   suppress_config_包名_2="进程名2"
+      "com.tencent.tim": {
+        "enabled": true,
+        "processes": [
+          "com.tencent.tim:appbrand0",
+          "com.tencent.tim:video"
+        ]
+      }
    ```
-   示例配置：
-   ```
-   # 压制A114514APP(包名com.a114514.app)
-   suppress_APP_com_a114514_app=true
-   suppress_config_com_a114514_app_1="com_a114514_app:fvv"
-   suppress_config_com_a114514_app_2="com_a114514_app:appbrand114"
-   ```
+   enabled: true 表示启用该应用的压制策略
+   processes: 是一个数组，包含了该应用的进程名，多个进程名用逗号分隔
    **欢迎提交 PR 增加更多配置**
-
-3. **注意事项**
-   - 修改配置后需要重启生效
-   - 包名中的点(.)需要替换为下划线(_)
